@@ -27,7 +27,7 @@
   </section>
 
   <script>
-    // Pre-flight checks visible on screen, before the module runs.
+    window.__appReady = false;
     (function diag() {
       const el = document.getElementById('diag');
       const err = document.getElementById('error');
@@ -35,25 +35,29 @@
       parts.push('Protocol: ' + location.protocol);
       parts.push('Host: ' + (location.host || '(none)'));
       parts.push('Secure: ' + (window.isSecureContext ? 'yes' : 'no'));
+      parts.push('UA: ' + (navigator.userAgent.match(/(iPhone|Android|CrOS|Mac|Windows)/)?.[0] || 'other'));
       parts.push('getUserMedia: ' + (navigator.mediaDevices && navigator.mediaDevices.getUserMedia ? 'yes' : 'no'));
       el.textContent = parts.join(' | ');
-      if (location.protocol === 'file:') {
-        err.textContent = 'Opened as a local file. Camera needs HTTPS — open the Vercel URL instead.';
-        err.hidden = false;
-      } else if (!window.isSecureContext) {
-        err.textContent = 'Not a secure context. Camera needs HTTPS.';
+
+      function show(msg) {
+        err.textContent = String(msg);
         err.hidden = false;
       }
-      window.addEventListener('error', (e) => {
-        err.textContent = 'Script error: ' + (e.message || e.error);
-        err.hidden = false;
-      });
-      window.addEventListener('unhandledrejection', (e) => {
-        err.textContent = 'Load error: ' + (e.reason && e.reason.message || e.reason);
-        err.hidden = false;
-      });
+      if (location.protocol === 'file:') show('Opened as a local file. Open the Vercel URL instead.');
+      else if (!window.isSecureContext) show('Not a secure context. Camera needs HTTPS.');
+
+      window.addEventListener('error', (e) => show('Error: ' + (e.message || e.error)), true);
+      window.addEventListener('unhandledrejection', (e) => show('Load error: ' + ((e.reason && e.reason.message) || e.reason)));
+
+      // After 5 seconds, if the module hasn't signalled ready, surface a hint.
+      setTimeout(() => {
+        if (!window.__appReady) {
+          const existing = err.hidden ? '' : err.textContent + ' | ';
+          show(existing + 'App module did not initialise within 5s — likely the MediaPipe CDN was blocked. Try a different network.');
+        }
+      }, 5000);
     })();
   </script>
-  <script type="module" src="app.js"></script>
+  <script type="module" src="app.js" onerror="document.getElementById('error').textContent='Failed to load app.js';document.getElementById('error').hidden=false"></script>
 </body>
 </html>

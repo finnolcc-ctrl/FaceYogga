@@ -180,3 +180,7 @@ document.addEventListener("visibilitychange", () => {
 });
 
 startBtn.addEventListener("click", start, { once: false });
+
+// Signal to the pre-flight diag block that the module loaded successfully.
+window.__appReady = true;
+document.getElementById("diag").textContent += " | app: loaded";
