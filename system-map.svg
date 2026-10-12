@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" viewBox="0 0 680 500" role="img">
+<title>Face yoga system map</title>
+<desc>Four-tier system map: user surface, session orchestrator, perception/interpretation/personalization, persistence. AI components in purple.</desc>
+<defs>
+  <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </marker>
+  <style>
+    text { font-family: -apple-system, "Segoe UI", sans-serif; fill: #2C2C2A; }
+    .ts { font-size: 12px; fill: #5F5E5A; }
+    .th { font-size: 14px; font-weight: 500; }
+    .gray-fill { fill: #F1EFE8; stroke: #5F5E5A; }
+    .gray-text-th { fill: #2C2C2A; font-weight: 500; }
+    .gray-text-ts { fill: #5F5E5A; }
+    .purple-fill { fill: #EEEDFE; stroke: #534AB7; }
+    .purple-text-th { fill: #26215C; font-weight: 500; }
+    .purple-text-ts { fill: #3C3489; }
+    .arr { stroke: #5F5E5A; stroke-width: 1; fill: none; }
+    .section { font-size: 12px; fill: #5F5E5A; }
+  </style>
+</defs>
+
+<text class="section" x="40" y="28">User surface (visible)</text>
+<rect class="gray-fill" x="40" y="40" width="135" height="56" rx="8" stroke-width="0.5"/>
+<text class="th gray-text-th" x="107" y="65" text-anchor="middle">Permission</text>
+<text class="ts gray-text-ts" x="107" y="83" text-anchor="middle">Camera access</text>
+
+<rect class="gray-fill" x="195" y="40" width="135" height="56" rx="8" stroke-width="0.5"/>
+<text class="th gray-text-th" x="262" y="65" text-anchor="middle">Home</text>
+<text class="ts gray-text-ts" x="262" y="83" text-anchor="middle">Streak, sessions</text>
+
+<rect class="gray-fill" x="350" y="40" width="135" height="56" rx="8" stroke-width="0.5"/>
+<text class="th gray-text-th" x="417" y="65" text-anchor="middle">Round loop</text>
+<text class="ts gray-text-ts" x="417" y="83" text-anchor="middle">Hold, score, rest</text>
+
+<rect class="gray-fill" x="505" y="40" width="135" height="56" rx="8" stroke-width="0.5"/>
+<text class="th gray-text-th" x="572" y="65" text-anchor="middle">Report</text>
+<text class="ts gray-text-ts" x="572" y="83" text-anchor="middle">Stars, streak</text>
+
+<line x1="175" y1="68" x2="193" y2="68" class="arr" marker-end="url(#arrow)"/>
+<line x1="330" y1="68" x2="348" y2="68" class="arr" marker-end="url(#arrow)"/>
+<line x1="485" y1="68" x2="503" y2="68" class="arr" marker-end="url(#arrow)"/>
+
+<text class="section" x="40" y="130">Session orchestrator (hidden)</text>
+<rect class="gray-fill" x="40" y="140" width="600" height="46" rx="8" stroke-width="0.5"/>
+<text class="th gray-text-th" x="340" y="160" text-anchor="middle">State machine</text>
+<text class="ts gray-text-ts" x="340" y="178" text-anchor="middle">Timers, wake lock, visibility handler</text>
+<line x1="340" y1="140" x2="340" y2="100" class="arr" marker-end="url(#arrow)"/>
+
+<text class="section" x="40" y="214">Perception, interpretation, personalization (hidden)</text>
+
+<rect class="purple-fill" x="40" y="226" width="180" height="100" rx="8" stroke-width="0.5"/>
+<text class="th purple-text-th" x="130" y="254" text-anchor="middle">Perception AI</text>
+<text class="ts purple-text-ts" x="130" y="274" text-anchor="middle">MediaPipe landmarker</text>
+<text class="ts purple-text-ts" x="130" y="292" text-anchor="middle">Pre-trained, in browser</text>
+<text class="ts purple-text-ts" x="130" y="310" text-anchor="middle">52 blendshapes / frame</text>
+
+<rect x="240" y="226" width="200" height="100" rx="8" fill="none" stroke="#888780" stroke-width="0.5" stroke-dasharray="4 4"/>
+<text class="th" x="340" y="246" text-anchor="middle">Interpretation</text>
+<rect class="gray-fill" x="252" y="256" width="176" height="28" rx="6" stroke-width="0.5"/>
+<text class="ts gray-text-ts" x="340" y="274" text-anchor="middle">Detect, hold, score</text>
+<rect class="purple-fill" x="252" y="290" width="176" height="28" rx="6" stroke-width="0.5"/>
+<text class="ts purple-text-ts" x="340" y="308" text-anchor="middle">Form quality AI</text>
+
+<rect class="purple-fill" x="460" y="226" width="180" height="100" rx="8" stroke-width="0.5"/>
+<text class="th purple-text-th" x="550" y="254" text-anchor="middle">Personalization AI</text>
+<text class="ts purple-text-ts" x="550" y="274" text-anchor="middle">Adaptive thresholds</text>
+<text class="ts purple-text-ts" x="550" y="292" text-anchor="middle">On-device learning</text>
+<text class="ts purple-text-ts" x="550" y="310" text-anchor="middle">From session history</text>
+
+<line x1="220" y1="276" x2="238" y2="276" class="arr" marker-end="url(#arrow)"/>
+<line x1="458" y1="276" x2="442" y2="276" class="arr" marker-end="url(#arrow)"/>
+<line x1="340" y1="226" x2="340" y2="188" class="arr" marker-end="url(#arrow)"/>
+
+<text class="section" x="40" y="354">Configuration and persistence</text>
+<rect class="gray-fill" x="120" y="366" width="200" height="48" rx="8" stroke-width="0.5"/>
+<text class="th gray-text-th" x="220" y="386" text-anchor="middle">Move registry</text>
+<text class="ts gray-text-ts" x="220" y="404" text-anchor="middle">JSON, hand-authored</text>
+
+<rect class="gray-fill" x="360" y="366" width="200" height="48" rx="8" stroke-width="0.5"/>
+<text class="th gray-text-th" x="460" y="386" text-anchor="middle">Local store</text>
+<text class="ts gray-text-ts" x="460" y="404" text-anchor="middle">Streak, calibration, sessions</text>
+
+<line x1="220" y1="366" x2="220" y2="340" class="arr" marker-end="url(#arrow)"/>
+<text class="ts" x="226" y="356">read</text>
+<path d="M 460 366 L 460 352 L 550 352 L 550 328" fill="none" stroke="#534AB7" stroke-width="1.5" marker-end="url(#arrow)"/>
+<text class="ts" x="466" y="356" fill="#534AB7">learning loop</text>
+<path d="M 340 186 L 340 200 L 460 200 L 460 414" fill="none" stroke="#888780" stroke-width="0.5" stroke-dasharray="4 4" marker-end="url(#arrow)"/>
+<text class="ts" x="466" y="204">save session</text>
+
+<text class="section" x="40" y="446">Camera feed</text>
+<line x1="40" y1="458" x2="130" y2="458" stroke="#888780" stroke-width="0.5" stroke-dasharray="3 3"/>
+<path d="M 130 458 L 130 328" fill="none" stroke="#888780" stroke-width="0.5" stroke-dasharray="3 3" marker-end="url(#arrow)"/>
+
+<rect x="400" y="440" width="12" height="12" rx="2" class="purple-fill" stroke-width="0.5"/>
+<text class="ts" x="420" y="451">= AI component</text>
+<rect x="520" y="440" width="12" height="12" rx="2" class="gray-fill" stroke-width="0.5"/>
+<text class="ts" x="540" y="451">= algorithmic / data</text>
+</svg>

@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+  <meta name="theme-color" content="#0b0b0b">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Face Yoga — Week 1</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <section id="intro" class="screen">
+    <h1>Face Yoga</h1>
+    <p class="hint">Week 1 test. We will turn on the front camera and show live expression values from MediaPipe.</p>
+    <p class="privacy">Video stays on your phone. Nothing is uploaded.</p>
+    <button id="start" class="primary" type="button">Start camera</button>
+    <p id="error" class="error" hidden></p>
+    <p class="footnote">If nothing happens: iOS needs HTTPS and may ask permission. Allow camera when prompted.</p>
+  </section>
+
+  <section id="stage" class="screen" hidden>
+    <video id="video" playsinline autoplay muted></video>
+    <div id="status">loading…</div>
+    <div id="fps">— fps</div>
+    <ul id="scores" aria-label="Live blendshape scores"></ul>
+  </section>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
