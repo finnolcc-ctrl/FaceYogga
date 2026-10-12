@@ -16,7 +16,7 @@
     <p class="privacy">Video stays on your phone. Nothing is uploaded.</p>
     <button id="start" class="primary" type="button">Start camera</button>
     <p id="error" class="error" hidden></p>
-    <p class="footnote">If nothing happens: iOS needs HTTPS and may ask permission. Allow camera when prompted.</p>
+    <p id="diag" class="footnote">Loading app…</p>
   </section>
 
   <section id="stage" class="screen" hidden>
@@ -26,6 +26,34 @@
     <ul id="scores" aria-label="Live blendshape scores"></ul>
   </section>
 
+  <script>
+    // Pre-flight checks visible on screen, before the module runs.
+    (function diag() {
+      const el = document.getElementById('diag');
+      const err = document.getElementById('error');
+      const parts = [];
+      parts.push('Protocol: ' + location.protocol);
+      parts.push('Host: ' + (location.host || '(none)'));
+      parts.push('Secure: ' + (window.isSecureContext ? 'yes' : 'no'));
+      parts.push('getUserMedia: ' + (navigator.mediaDevices && navigator.mediaDevices.getUserMedia ? 'yes' : 'no'));
+      el.textContent = parts.join(' | ');
+      if (location.protocol === 'file:') {
+        err.textContent = 'Opened as a local file. Camera needs HTTPS — open the Vercel URL instead.';
+        err.hidden = false;
+      } else if (!window.isSecureContext) {
+        err.textContent = 'Not a secure context. Camera needs HTTPS.';
+        err.hidden = false;
+      }
+      window.addEventListener('error', (e) => {
+        err.textContent = 'Script error: ' + (e.message || e.error);
+        err.hidden = false;
+      });
+      window.addEventListener('unhandledrejection', (e) => {
+        err.textContent = 'Load error: ' + (e.reason && e.reason.message || e.reason);
+        err.hidden = false;
+      });
+    })();
+  </script>
   <script type="module" src="app.js"></script>
 </body>
 </html>
