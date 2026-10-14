@@ -12,6 +12,40 @@ const STORAGE_KEY = "faceyoga.v2";
 const MP_VERSION = "1.1.0";
 const MODEL_URL  = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
 
+// =====================================================
+// FACE MESH OVERLAY
+// Dots + lines that follow the user's face in real time.
+// Sticker slots take image URLs — drop files into
+// /stickers/ and update STICKER_SLOTS[x].imageUrl.
+// =====================================================
+const MESH_POINTS = [
+  10, 103, 332, 70, 300, 55, 285,
+  33, 263, 133, 362,
+  1, 234, 454,
+  61, 291, 148, 377, 152,
+];
+const MESH_CONNECTIONS = [
+  [10,103],[10,332],[103,332],[103,70],[332,300],
+  [70,55],[55,285],[285,300],
+  [70,33],[300,263],[55,133],[285,362],
+  [33,1],[263,1],[133,1],[362,1],
+  [1,234],[1,454],[234,33],[454,263],
+  [234,61],[454,291],[1,61],[1,291],
+  [61,148],[291,377],[148,377],[148,152],[377,152],
+];
+const STICKER_SLOTS = {
+  brow_green_l:  { anchor: 55,  size: 44, offset: [0, -6] },
+  brow_green_r:  { anchor: 285, size: 44, offset: [0, -6] },
+  temple_l:      { anchor: 70,  size: 30, offset: [-8, -2] },
+  temple_r:      { anchor: 300, size: 30, offset: [ 8, -2] },
+  cheek_star_l:  { anchor: 234, size: 38, offset: [10, 4] },
+  cheek_star_r:  { anchor: 454, size: 38, offset: [-10, 4] },
+  nose_bow:      { anchor: 1,   size: 26, offset: [0, 2] },
+  chin_l:        { anchor: 148, size: 36, offset: [-4, 8] },
+  chin_r:        { anchor: 377, size: 36, offset: [ 4, 8] },
+};
+const StickerCache = {};  // url -> HTMLImageElement
+
 // -------- State --------
 const State = {
   routine: null,
@@ -19,7 +53,7 @@ const State = {
   cameraStream: null,
   landmarker: null,
   session: null,           // active session object
-  timers: { phase: null, active: null, demo: null, ready: null, rest: null, setup: null },
+  timers: { phase: null, active: null, demo: null, ready: null, rest: null, setup: null, mesh: null },
   paused: false,
   wakeLock: null,
 };
@@ -181,6 +215,7 @@ async function beginCameraSetup() {
 }
 
 function runSetupLoop(videoEl, statusEl, ovalEl) {
+  const meshEl = document.getElementById("setupMesh");
   let stableStart = 0;
   let lastVidTime = -1;
   const tick = () => {
@@ -190,7 +225,9 @@ function runSetupLoop(videoEl, statusEl, ovalEl) {
       try {
         const res = State.landmarker.detectForVideo(videoEl, performance.now());
         const hasFace = res.faceLandmarks?.length > 0;
+        drawMesh(meshEl, videoEl, res.faceLandmarks);
         if (hasFace) {
+          meshEl.classList.add("on");
           ovalEl.classList.add("ok");
           if (!stableStart) stableStart = performance.now();
           const held = performance.now() - stableStart;
@@ -203,6 +240,7 @@ function runSetupLoop(videoEl, statusEl, ovalEl) {
             return;
           }
         } else {
+          meshEl.classList.remove("on");
           ovalEl.classList.remove("ok");
           stableStart = 0;
           statusEl.textContent = "Fit your face in the circle";
@@ -210,6 +248,31 @@ function runSetupLoop(videoEl, statusEl, ovalEl) {
       } catch (e) {
         showDiag("detect error: " + e.message);
       }
+    }
+  };
+  tick();
+}
+
+// Keep the mesh animated throughout the exercise too.
+function runExerciseMeshLoop() {
+  const videoEl = document.getElementById("exerciseVideo");
+  const meshEl  = document.getElementById("exerciseMesh");
+  if (!State.landmarker || !State.cameraStream) return;
+  let lastVidTime = -1;
+  const tick = () => {
+    if (!State.session || State.mode !== "camera_assisted_candidate") {
+      meshEl.classList.remove("on");
+      return;
+    }
+    State.timers.mesh = requestAnimationFrame(tick);
+    if (videoEl.currentTime !== lastVidTime && videoEl.readyState >= 2) {
+      lastVidTime = videoEl.currentTime;
+      try {
+        const res = State.landmarker.detectForVideo(videoEl, performance.now());
+        drawMesh(meshEl, videoEl, res.faceLandmarks);
+        if (res.faceLandmarks?.length) meshEl.classList.add("on");
+        else meshEl.classList.remove("on");
+      } catch {}
     }
   };
   tick();
@@ -284,8 +347,10 @@ function startSession(mode) {
     vid.srcObject = State.cameraStream;
     vid.classList.add("show");
     vid.play().catch(()=>{});
+    runExerciseMeshLoop();
   } else {
     vid.classList.remove("show");
+    document.getElementById("exerciseMesh").classList.remove("on");
   }
 
   nextMove();
@@ -720,5 +785,87 @@ function showDiag(msg) {
   el.textContent = String(msg).slice(0, 160);
 }
 
+// =========================================================
+// FACE MESH DRAWING
+// =========================================================
+function fitCanvasToVideo(canvas, video) {
+  const dpr = window.devicePixelRatio || 1;
+  const w = video.videoWidth, h = video.videoHeight;
+  if (!w || !h) return false;
+  if (canvas.width !== w * dpr || canvas.height !== h * dpr) {
+    canvas.width  = w * dpr;
+    canvas.height = h * dpr;
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  return true;
+}
+
+function drawMesh(canvas, video, landmarks) {
+  if (!fitCanvasToVideo(canvas, video)) return;
+  const ctx = canvas.getContext("2d");
+  const w = video.videoWidth, h = video.videoHeight;
+  ctx.clearRect(0, 0, w, h);
+  if (!landmarks || !landmarks.length) return;
+
+  const pts = landmarks[0];
+
+  // Lines first (so dots sit on top)
+  ctx.strokeStyle = "rgba(255,255,255,0.55)";
+  ctx.lineWidth = Math.max(1, w / 640);
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  for (const [a, b] of MESH_CONNECTIONS) {
+    const pa = pts[a], pb = pts[b];
+    if (!pa || !pb) continue;
+    ctx.moveTo(pa.x * w, pa.y * h);
+    ctx.lineTo(pb.x * w, pb.y * h);
+  }
+  ctx.stroke();
+
+  // Dots
+  ctx.fillStyle = "#fff";
+  const r = Math.max(2.5, w / 240);
+  for (const idx of MESH_POINTS) {
+    const p = pts[idx];
+    if (!p) continue;
+    ctx.beginPath();
+    ctx.arc(p.x * w, p.y * h, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Stickers (scaled by eye distance to track face size)
+  const eyeL = pts[33], eyeR = pts[263];
+  const eyeDist = eyeL && eyeR
+    ? Math.hypot((eyeR.x - eyeL.x) * w, (eyeR.y - eyeL.y) * h)
+    : 160;
+  const scale = eyeDist / 160;
+
+  for (const key in STICKER_SLOTS) {
+    const slot = STICKER_SLOTS[key];
+    const img = slot.imageUrl ? StickerCache[slot.imageUrl] : null;
+    if (!img || !img.complete || !img.naturalWidth) continue;
+    const p = pts[slot.anchor];
+    if (!p) continue;
+    const size = slot.size * scale;
+    const [ox, oy] = slot.offset || [0, 0];
+    const cx = p.x * w + ox * scale;
+    const cy = p.y * h + oy * scale;
+    ctx.drawImage(img, cx - size / 2, cy - size / 2, size, size);
+  }
+}
+
+function preloadStickers() {
+  for (const key in STICKER_SLOTS) {
+    const url = STICKER_SLOTS[key].imageUrl;
+    if (!url || StickerCache[url]) continue;
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.src = url;
+    StickerCache[url] = img;
+  }
+}
+
 // Signal readiness for diagnostics
 window.__appReady = true;
+preloadStickers();
