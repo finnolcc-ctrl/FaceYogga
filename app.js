@@ -34,15 +34,15 @@ const MESH_CONNECTIONS = [
   [61,148],[291,377],[148,377],[148,152],[377,152],
 ];
 const STICKER_SLOTS = {
-  brow_green_l:  { anchor: 55,  size: 44, offset: [0, -8],  imageUrl: "stickers/brow.svg"   },
-  brow_green_r:  { anchor: 285, size: 44, offset: [0, -8],  imageUrl: "stickers/brow.svg"   },
-  temple_l:      { anchor: 70,  size: 28, offset: [-10, -2],imageUrl: "stickers/temple.svg" },
-  temple_r:      { anchor: 300, size: 28, offset: [ 10, -2],imageUrl: "stickers/temple.svg" },
-  cheek_star_l:  { anchor: 234, size: 42, offset: [12, 6],  imageUrl: "stickers/cheek.svg"  },
-  cheek_star_r:  { anchor: 454, size: 42, offset: [-12, 6], imageUrl: "stickers/cheek.svg"  },
-  nose_bow:      { anchor: 1,   size: 28, offset: [0, 4],   imageUrl: "stickers/nose.svg"   },
-  chin_l:        { anchor: 148, size: 36, offset: [-6, 8],  imageUrl: "stickers/chin.svg"   },
-  chin_r:        { anchor: 377, size: 36, offset: [ 6, 8],  imageUrl: "stickers/chin.svg"   },
+  brow_green_l:  { anchor: 55,  size: 22, offset: [0, -22], imageUrl: "stickers/brow.svg"   },
+  brow_green_r:  { anchor: 285, size: 22, offset: [0, -22], imageUrl: "stickers/brow.svg"   },
+  temple_l:      { anchor: 70,  size: 14, offset: [-16, -6],imageUrl: "stickers/temple.svg" },
+  temple_r:      { anchor: 300, size: 14, offset: [ 16, -6],imageUrl: "stickers/temple.svg" },
+  cheek_star_l:  { anchor: 234, size: 22, offset: [18, 14], imageUrl: "stickers/cheek.svg"  },
+  cheek_star_r:  { anchor: 454, size: 22, offset: [-18, 14],imageUrl: "stickers/cheek.svg"  },
+  nose_bow:      { anchor: 1,   size: 14, offset: [0, 10],  imageUrl: "stickers/nose.svg"   },
+  chin_l:        { anchor: 148, size: 18, offset: [-10, 12],imageUrl: "stickers/chin.svg"   },
+  chin_r:        { anchor: 377, size: 18, offset: [ 10, 12],imageUrl: "stickers/chin.svg"   },
 };
 // StickerLayer manages HTML img elements positioned over the mesh.
 // Keeps SVG fidelity (gradients + filters + foreignObject all render natively).
@@ -402,14 +402,17 @@ function startSession(mode) {
   show("exercise");
 
   // Camera visible as a soft mirror backdrop if camera mode
+  const exerciseScreen = document.querySelector("[data-screen='exercise']");
   const vid = document.getElementById("exerciseVideo");
   if (mode === "camera_assisted_candidate" && State.cameraStream) {
     vid.srcObject = State.cameraStream;
     vid.classList.add("show");
     vid.play().catch(()=>{});
+    exerciseScreen.classList.add("in-camera-mode");
     runExerciseMeshLoop();
   } else {
     vid.classList.remove("show");
+    exerciseScreen.classList.remove("in-camera-mode");
     document.getElementById("exerciseMesh").classList.remove("on");
   }
 
@@ -423,6 +426,7 @@ function teardownExercise() {
   document.getElementById("pauseOverlay").hidden = true;
   document.getElementById("selfcheck").hidden = true;
   document.getElementById("demoOverlay").hidden = true;
+  document.querySelector("[data-screen='exercise']").classList.remove("in-camera-mode");
   stopCamera();
   releaseWakeLock();
 }
@@ -463,6 +467,7 @@ function runDemo(move) {
   setStageLabel("Demo");
   document.getElementById("phaseCue").textContent = move.title.en;
   document.getElementById("phaseSub").textContent = move.script.introEn;
+  setPhaseTrack(trackTypeFor(move.id));
   setPhaseVisual(demoVisualFor(move.id));
   renderRhythmDots(cycleCountFor(move), -1);
 
@@ -726,6 +731,26 @@ function setStageLabel(txt) {
   document.getElementById("stageLabel").textContent = txt;
 }
 
+function setPhaseTrack(trackClass) {
+  const t = document.getElementById("phaseTrack");
+  t.className = "phase-track" + (trackClass ? " " + trackClass + " on" : "");
+}
+
+function trackTypeFor(moveId) {
+  switch (moveId) {
+    case "pucker_side_to_side":
+    case "air_side_to_side":
+    case "tongue_inner_cheek":
+      return "lateral";
+    case "pucker_circles":
+      return "circular";
+    case "cheek_draw_in":
+      return "hold-track";
+    default:
+      return "";  // vowels — letter speaks for itself
+  }
+}
+
 function setPhaseVisual(kind) {
   const visual = document.getElementById("phaseVisual");
   const letter = document.getElementById("phaseLetter");
@@ -766,17 +791,17 @@ function demoVisualFor(moveId) {
 function phaseVisualFor(moveId, phase) {
   switch (moveId) {
     case "pucker_side_to_side":
-      return phase === "left" ? "shift-left" : "shift-right";
+      return phase === "left" ? "shift-left dot-left" : "shift-right dot-right";
     case "pucker_circles":
-      return `dot-${phase}`;
+      return `dot-${phase} shift-${phase}`;
     case "vowel_a_u":
       return phase === "a" ? "letter-A vowel-a" : "letter-U vowel-u";
     case "vowel_e_u":
       return phase === "e" ? "letter-E vowel-e" : "letter-U vowel-u";
     case "tongue_inner_cheek":
-      return phase.includes("left") ? "shift-left" : "shift-right";
+      return phase.includes("left") ? "shift-left dot-left" : "shift-right dot-right";
     case "air_side_to_side":
-      return phase === "left" ? "shift-left" : "shift-right";
+      return phase === "left" ? "shift-left dot-left" : "shift-right dot-right";
     case "cheek_draw_in":
       if (phase === "hold") return "hold";
       return phase === "draw_in" ? "draw-in" : "release";

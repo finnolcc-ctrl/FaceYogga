@@ -441,6 +441,32 @@ ul, ol { list-style: none; }
 .exercise-body { z-index: 4 !important; }
 .topbar-exercise { z-index: 5 !important; }
 
+/* Camera-mode layout: push UI to the bottom so the face stays unblocked */
+.screen-exercise.in-camera-mode .exercise-body {
+  justify-content: flex-end;
+  padding-bottom: 20px;
+  gap: 14px;
+}
+.screen-exercise.in-camera-mode .phase-stage {
+  width: 180px;
+  height: 180px;
+}
+.screen-exercise.in-camera-mode .phase-glow {
+  width: 110px;
+  height: 110px;
+  opacity: .85;
+}
+.screen-exercise.in-camera-mode .phase-letter {
+  font-size: 54px;
+}
+.screen-exercise.in-camera-mode .phase-ring { display: none; }
+.screen-exercise.in-camera-mode .phase-copy { padding: 0 24px; }
+.screen-exercise.in-camera-mode .phase-cue { font-size: 22px; }
+.screen-exercise.in-camera-mode .exercise-dim {
+  background:
+    linear-gradient(180deg, rgba(0,0,0,.35) 0%, transparent 20%, transparent 55%, rgba(0,0,0,.85) 90%);
+}
+
 .sticker-layer {
   position: absolute;
   inset: 0;
@@ -585,7 +611,79 @@ ul, ol { list-style: none; }
   position: relative;
   width: 260px; height: 260px;
   display: grid; place-items: center;
+  transition: width .4s ease, height .4s ease, transform .4s ease;
 }
+
+/* Visible motion tracks — give the dot/glow a spatial reference */
+.phase-track {
+  position: absolute;
+  inset: 0;
+  display: grid; place-items: center;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .4s ease;
+}
+.phase-track.on { opacity: 1; }
+
+/* Horizontal track for left/right moves */
+.phase-track.lateral::before {
+  content: "";
+  width: 70%;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg,
+    rgba(255,255,255,0) 0%,
+    rgba(255,255,255,.35) 15%,
+    rgba(255,255,255,.5) 50%,
+    rgba(255,255,255,.35) 85%,
+    rgba(255,255,255,0) 100%);
+}
+.phase-track.lateral::after {
+  content: "";
+  position: absolute;
+  width: 70%;
+  display: flex;
+  justify-content: space-between;
+  color: rgba(255,255,255,.6);
+  font-size: 14px;
+  letter-spacing: 2px;
+  pointer-events: none;
+}
+
+/* Circular dashed track for circle moves */
+.phase-track.circular::before {
+  content: "";
+  width: 72%; height: 72%;
+  border-radius: 50%;
+  border: 1.5px dashed rgba(255,255,255,.3);
+}
+
+/* Breath track (concentric rings for hold) */
+.phase-track.hold-track::before {
+  content: "";
+  width: 60%; height: 60%;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,.25);
+  animation: holdTrack 3.5s ease-in-out infinite;
+}
+@keyframes holdTrack {
+  0%,100% { transform: scale(.9); opacity: .4; }
+  50%     { transform: scale(1.15); opacity: .9; }
+}
+
+/* Direction arrows for lateral moves */
+.phase-arrow {
+  position: absolute;
+  font-size: 32px;
+  color: #fff;
+  text-shadow: 0 0 20px rgba(255,255,255,.6);
+  opacity: 0;
+  transition: opacity .3s ease, transform .5s cubic-bezier(.5,0,.2,1);
+  pointer-events: none;
+}
+.phase-arrow.show { opacity: 1; }
+.phase-arrow.left  { left: 8%;  }
+.phase-arrow.right { right: 8%; }
 .phase-visual {
   position: absolute;
   inset: 0;
@@ -611,14 +709,21 @@ ul, ol { list-style: none; }
 .phase-letter.show { opacity: 1; }
 .phase-dot {
   position: absolute;
-  width: 14px; height: 14px;
+  width: 18px; height: 18px;
   border-radius: 50%;
   background: #fff;
-  box-shadow: 0 0 24px rgba(255,210,180,.9);
+  box-shadow:
+    0 0 0 3px rgba(255,255,255,.25),
+    0 0 32px rgba(255,210,180,1);
   opacity: 0;
+  z-index: 2;
   transition: transform .9s cubic-bezier(.6,0,.3,1), opacity .3s ease;
 }
-.phase-dot.show { opacity: 1; }
+.phase-dot.show { opacity: 1; animation: dotPulse 1.8s ease-in-out infinite; }
+@keyframes dotPulse {
+  0%,100% { box-shadow: 0 0 0 3px rgba(255,255,255,.25), 0 0 24px rgba(255,210,180,.9); }
+  50%     { box-shadow: 0 0 0 6px rgba(255,255,255,.35), 0 0 40px rgba(255,210,180,1); }
+}
 .phase-ring {
   position: absolute;
   inset: 0;
