@@ -1,63 +1,264 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
-  <meta name="theme-color" content="#0b0b0b">
+  <meta name="theme-color" content="#07080c">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>Face Yoga — Week 1</title>
+  <title>Face Yoga</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <section id="intro" class="screen">
-    <h1>Face Yoga</h1>
-    <p class="hint">Week 1 test. We will turn on the front camera and show live expression values from MediaPipe.</p>
-    <p class="privacy">Video stays on your phone. Nothing is uploaded.</p>
-    <button id="start" class="primary" type="button">Start camera</button>
-    <p id="error" class="error" hidden></p>
-    <p id="diag" class="footnote">Loading app…</p>
+
+<div id="aurora" aria-hidden="true">
+  <span class="blob b1"></span>
+  <span class="blob b2"></span>
+  <span class="blob b3"></span>
+  <span class="grain"></span>
+</div>
+
+<main id="app">
+
+  <!-- ============ HOME ============ -->
+  <section class="screen" data-screen="home">
+    <header class="topbar">
+      <span class="brand">Face Yoga</span>
+      <span class="date" id="homeDate">—</span>
+    </header>
+
+    <article class="hero glass" id="streakHero">
+      <div class="hero-aurora" aria-hidden="true"></div>
+      <div class="hero-top">
+        <span class="eyebrow">今日练习 · Day <span id="streakDay">1</span></span>
+        <span class="pill pill-ghost" id="streakPill">— 天连续</span>
+      </div>
+      <div class="hero-body">
+        <h1 class="hero-title">安静地照顾<br>你的脸</h1>
+        <p class="hero-sub">七组动作，约 4–5 分钟。无评分，只跟练。</p>
+      </div>
+      <button class="btn btn-primary" data-action="startSession">
+        <span>开始今天的练习</span>
+        <span class="arrow">→</span>
+      </button>
+    </article>
+
+    <section class="tile-grid">
+      <article class="tile glass" aria-label="Weekly rhythm">
+        <span class="tile-label">本周</span>
+        <div class="weekdots" id="weekDots"></div>
+        <span class="tile-sub" id="weekSummary">开始第一次</span>
+      </article>
+      <article class="tile glass" aria-label="Total sessions">
+        <span class="tile-label">累计</span>
+        <div class="tile-num"><span id="totalSessions">0</span><em>次</em></div>
+        <span class="tile-sub">完成的练习</span>
+      </article>
+    </section>
+
+    <article class="tile tile-wide glass">
+      <div class="tile-wide-head">
+        <span class="tile-label">今日流程</span>
+        <span class="pill pill-ghost">7 组 · ~4 分钟</span>
+      </div>
+      <ul class="moves-mini" id="movesPreviewHome"></ul>
+    </article>
+
+    <p class="footnote">视频只在你的手机上处理，不会上传。</p>
   </section>
 
-  <section id="stage" class="screen" hidden>
-    <video id="video" playsinline autoplay muted></video>
-    <div id="status">loading…</div>
-    <div id="fps">— fps</div>
-    <ul id="scores" aria-label="Live blendshape scores"></ul>
+  <!-- ============ PREVIEW ============ -->
+  <section class="screen" data-screen="preview" hidden>
+    <header class="topbar">
+      <button class="icon-btn" data-action="goHome" aria-label="返回">←</button>
+      <span class="brand">今日流程</span>
+      <span></span>
+    </header>
+
+    <h1 class="screen-title">七组动作<br><em>轻轻跟着做</em></h1>
+
+    <ol class="moves-full" id="movesListFull"></ol>
+
+    <div class="screen-cta">
+      <button class="btn btn-primary" data-action="toCameraChoice">
+        <span>继续</span><span class="arrow">→</span>
+      </button>
+    </div>
   </section>
 
-  <script>
-    window.__appReady = false;
-    (function diag() {
-      const el = document.getElementById('diag');
-      const err = document.getElementById('error');
-      const parts = [];
-      parts.push('Protocol: ' + location.protocol);
-      parts.push('Host: ' + (location.host || '(none)'));
-      parts.push('Secure: ' + (window.isSecureContext ? 'yes' : 'no'));
-      parts.push('UA: ' + (navigator.userAgent.match(/(iPhone|Android|CrOS|Mac|Windows)/)?.[0] || 'other'));
-      parts.push('getUserMedia: ' + (navigator.mediaDevices && navigator.mediaDevices.getUserMedia ? 'yes' : 'no'));
-      el.textContent = parts.join(' | ');
+  <!-- ============ CAMERA CHOICE ============ -->
+  <section class="screen" data-screen="cameraChoice" hidden>
+    <header class="topbar">
+      <button class="icon-btn" data-action="toPreview" aria-label="返回">←</button>
+      <span class="brand">选择模式</span>
+      <span></span>
+    </header>
 
-      function show(msg) {
-        err.textContent = String(msg);
-        err.hidden = false;
-      }
-      if (location.protocol === 'file:') show('Opened as a local file. Open the Vercel URL instead.');
-      else if (!window.isSecureContext) show('Not a secure context. Camera needs HTTPS.');
+    <h1 class="screen-title">想开摄像头吗？</h1>
+    <p class="screen-sub">两种都可以完成完整练习。摄像头只用来帮你看自己，不用来打分。</p>
 
-      window.addEventListener('error', (e) => show('Error: ' + (e.message || e.error)), true);
-      window.addEventListener('unhandledrejection', (e) => show('Load error: ' + ((e.reason && e.reason.message) || e.reason)));
+    <div class="mode-cards">
+      <button class="mode-card glass" data-action="chooseCamera">
+        <span class="mode-badge experimental">实验性</span>
+        <h3>镜子模式</h3>
+        <p>打开前置摄像头，自己能看到动作。<br>当前版本不自动计数、不显示准确率。</p>
+        <span class="mode-cta">用摄像头 →</span>
+      </button>
+      <button class="mode-card glass" data-action="chooseGuided">
+        <span class="mode-badge">推荐</span>
+        <h3>跟练模式</h3>
+        <p>只跟着节拍和提示做动作，不需要摄像头。<br>每组结束自己确认一下。</p>
+        <span class="mode-cta">开始跟练 →</span>
+      </button>
+    </div>
+  </section>
 
-      // After 5 seconds, if the module hasn't signalled ready, surface a hint.
-      setTimeout(() => {
-        if (!window.__appReady) {
-          const existing = err.hidden ? '' : err.textContent + ' | ';
-          show(existing + 'App module did not initialise within 5s — likely the MediaPipe CDN was blocked. Try a different network.');
-        }
-      }, 5000);
-    })();
-  </script>
-  <script type="module" src="app.js" onerror="document.getElementById('error').textContent='Failed to load app.js';document.getElementById('error').hidden=false"></script>
+  <!-- ============ SETUP CHECK ============ -->
+  <section class="screen" data-screen="setup" hidden>
+    <header class="topbar">
+      <button class="icon-btn" data-action="toCameraChoice" aria-label="返回">←</button>
+      <span class="brand">准备中</span>
+      <span></span>
+    </header>
+
+    <div class="camera-stage">
+      <video id="setupVideo" playsinline autoplay muted></video>
+      <div class="face-oval" id="faceOval"></div>
+      <div class="setup-status glass" id="setupStatus">正在打开摄像头…</div>
+    </div>
+
+    <div class="screen-cta">
+      <button class="btn btn-ghost" data-action="chooseGuided">改为无摄像头</button>
+    </div>
+  </section>
+
+  <!-- ============ CALIBRATION ============ -->
+  <section class="screen" data-screen="calibration" hidden>
+    <header class="topbar">
+      <button class="icon-btn" data-action="chooseCamera" aria-label="重新设置">↺</button>
+      <span class="brand">校准</span>
+      <button class="icon-btn" data-action="skipCalibration" aria-label="跳过">↷</button>
+    </header>
+
+    <div class="calib-stage">
+      <div class="breath-ring" id="calibRing"></div>
+      <div class="calib-copy">
+        <span class="eyebrow" id="calibStep">1 / 4</span>
+        <h2 id="calibCue">保持自然放松的脸</h2>
+        <p id="calibSub">2 秒</p>
+      </div>
+    </div>
+
+    <p class="footnote">校准数值只保存在你的手机，不会上传。</p>
+  </section>
+
+  <!-- ============ EXERCISE ============ -->
+  <section class="screen screen-exercise" data-screen="exercise" hidden>
+    <!-- camera layer (behind UI) -->
+    <video id="exerciseVideo" playsinline autoplay muted></video>
+    <div class="exercise-dim" aria-hidden="true"></div>
+
+    <header class="topbar topbar-exercise">
+      <button class="icon-btn glass-chip" data-action="togglePause" id="pauseBtn" aria-label="暂停">II</button>
+      <div class="session-progress">
+        <span class="eyebrow"><span id="moveIndex">1</span> / 7</span>
+        <div class="progress-track"><div class="progress-fill" id="sessionProgress"></div></div>
+      </div>
+      <button class="icon-btn glass-chip" data-action="endSession" aria-label="结束">×</button>
+    </header>
+
+    <div class="exercise-body">
+      <div class="phase-stage">
+        <div class="phase-visual" id="phaseVisual">
+          <div class="phase-glow" id="phaseGlow"></div>
+          <span class="phase-letter" id="phaseLetter"></span>
+          <div class="phase-dot" id="phaseDot"></div>
+        </div>
+        <div class="phase-ring" id="phaseRing"></div>
+      </div>
+
+      <div class="phase-copy">
+        <span class="pill" id="stageLabel">准备</span>
+        <h2 class="phase-cue" id="phaseCue">—</h2>
+        <p class="phase-sub" id="phaseSub">—</p>
+      </div>
+
+      <div class="rhythm-dots" id="rhythmDots"></div>
+    </div>
+
+    <footer class="exercise-footer">
+      <button class="btn btn-ghost small" data-action="replayDemo">重看示范</button>
+      <button class="btn btn-ghost small" data-action="skipMove">跳过</button>
+    </footer>
+
+    <!-- Self-check overlay (shown after active) -->
+    <div class="selfcheck glass" id="selfcheck" hidden>
+      <h3 id="selfcheckQ">这组跟完了吗？</h3>
+      <div class="selfcheck-opts">
+        <button class="btn btn-primary" data-action="selfCompleted">完成了</button>
+        <button class="btn btn-ghost" data-action="selfRetry">再来一次</button>
+        <button class="btn btn-ghost" data-action="selfSkip">跳过</button>
+      </div>
+    </div>
+
+    <!-- Pause overlay -->
+    <div class="pause-overlay glass" id="pauseOverlay" hidden>
+      <h3>暂停</h3>
+      <p>节拍、提示和计时都已停下。</p>
+      <button class="btn btn-primary" data-action="resume">继续</button>
+      <button class="btn btn-ghost" data-action="endSession">结束练习</button>
+    </div>
+
+    <!-- Replay-demo overlay -->
+    <div class="demo-overlay" id="demoOverlay" hidden>
+      <div class="demo-ring"></div>
+      <span class="eyebrow">示范</span>
+      <h3 id="demoTitle">—</h3>
+      <p id="demoCue">—</p>
+      <button class="btn btn-ghost small" data-action="demoDone">好了</button>
+    </div>
+  </section>
+
+  <!-- ============ REPORT ============ -->
+  <section class="screen" data-screen="report" hidden>
+    <header class="topbar">
+      <span></span>
+      <span class="brand">本次练习</span>
+      <span></span>
+    </header>
+
+    <article class="hero glass report-hero">
+      <div class="hero-aurora bloom" aria-hidden="true"></div>
+      <span class="eyebrow">完成于 <span id="reportTime">—</span></span>
+      <h1 class="hero-title big" id="reportHeadline">好好休息了<br>一次</h1>
+      <p class="hero-sub" id="reportSub">—</p>
+      <div class="report-stats">
+        <div><strong id="reportCompleted">0</strong><em>完成</em></div>
+        <div><strong id="reportPartial">0</strong><em>部分</em></div>
+        <div><strong id="reportSkipped">0</strong><em>跳过</em></div>
+      </div>
+    </article>
+
+    <ul class="moves-full moves-report" id="reportList"></ul>
+
+    <article class="tile tile-wide glass streak-card">
+      <span class="tile-label">连续练习</span>
+      <div class="tile-num"><span id="reportStreak">1</span><em>天</em></div>
+      <span class="tile-sub" id="streakNote">保持这个节奏就好</span>
+    </article>
+
+    <div class="screen-cta">
+      <button class="btn btn-primary" data-action="goHome">完成</button>
+    </div>
+
+    <p class="footnote">所有记录只保存在你的手机。</p>
+  </section>
+
+  <!-- ============ DIAG (collapsible) ============ -->
+  <p id="diag" class="diag-strip" hidden></p>
+
+</main>
+
+<script type="module" src="app.js"></script>
 </body>
 </html>

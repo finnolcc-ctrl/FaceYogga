@@ -1,0 +1,159 @@
+{
+  "schemaVersion": "2.0",
+  "routineId": "selected_face_yoga_seven",
+  "routineVersion": "2026-10-14.1",
+  "source": {
+    "figmaFileKey": "N70ARlPwbAHVrSEfpuX4q5",
+    "pageId": "20:383",
+    "basis": "User screenshots and notes; not a full video transcription",
+    "confirmedLastMove": "repeat_draw_in_then_hold"
+  },
+  "timingStatus": "prototype_design_not_source_transcript",
+  "defaults": {
+    "demoMs": 6000,
+    "readyMs": 3000,
+    "resultRestMs": 5000,
+    "guidedRequiresSelfConfirmation": true,
+    "defaultMode": "guided",
+    "cameraAssistedRequires": ["device_validation_passed", "current_calibration_passed"],
+    "experimentalDetectorsEnabled": false,
+    "historyPersonalizationEnabled": false,
+    "rawVideoPersistence": false
+  },
+  "detectorDefaults": {
+    "emaTauMs": 100,
+    "phaseEnterMs": 250,
+    "phaseExitMs": 150,
+    "minCycleIntervalMs": 800,
+    "maxTransitionMs": 1500,
+    "maxFrameGapMs": 250,
+    "trackingPauseAfterMs": 3000,
+    "templateMaxDistance": 0.35,
+    "templateMargin": 0.15,
+    "templateMinSeparation": 0.6,
+    "thresholdStatus": "unvalidated_initial_values"
+  },
+  "moves": [
+    {
+      "id": "pucker_side_to_side",
+      "order": 1,
+      "title": { "zh": "撅嘴左右移动", "en": "Pucker side to side" },
+      "preferredMode": "guided",
+      "activeMs": 20000,
+      "repeat": 5,
+      "phaseSchedule": [
+        { "phase": "left",  "durationMs": 2000, "cue": { "zh": "嘴唇向左侧移动", "en": "Move lips to your left" } },
+        { "phase": "right", "durationMs": 2000, "cue": { "zh": "慢慢移到右侧", "en": "Slowly to your right" } }
+      ],
+      "script": {
+        "introZh": "轻轻撅起嘴唇，脸朝向镜头。头尽量保持不动。",
+        "outroZh": "回到中间，放松。"
+      }
+    },
+    {
+      "id": "pucker_circles",
+      "order": 2,
+      "title": { "zh": "撅嘴画圈", "en": "Pucker circles" },
+      "preferredMode": "guided",
+      "activeMs": 24000,
+      "repeat": 4,
+      "phaseSchedule": [
+        { "phase": "left",  "durationMs": 1500, "cue": { "zh": "跟着圆点，向左", "en": "Follow the dot, left" } },
+        { "phase": "up",    "durationMs": 1500, "cue": { "zh": "慢慢向上",      "en": "Slowly upward" } },
+        { "phase": "right", "durationMs": 1500, "cue": { "zh": "移到右侧",      "en": "To your right" } },
+        { "phase": "down",  "durationMs": 1500, "cue": { "zh": "向下，回起点",  "en": "Downward, back to start" } }
+      ],
+      "reversePhaseOrder": ["left", "down", "right", "up"],
+      "script": {
+        "introZh": "轻轻撅嘴，跟着圆点画小圈，不要用转头代替。",
+        "outroZh": "回到中间，放松嘴唇。"
+      }
+    },
+    {
+      "id": "vowel_a_u",
+      "order": 3,
+      "title": { "zh": "A 与 U 交替", "en": "A to U" },
+      "preferredMode": "guided",
+      "activeMs": 20000,
+      "repeat": 5,
+      "phaseSchedule": [
+        { "phase": "a", "durationMs": 2000, "cue": { "zh": "A：轻轻打开嘴", "en": "A: open gently" } },
+        { "phase": "u", "durationMs": 2000, "cue": { "zh": "U：嘴唇收圆",   "en": "U: round the lips" } }
+      ],
+      "script": {
+        "introZh": "先张开嘴做 A，再把嘴唇收圆做 U，不需要发声。",
+        "outroZh": "合上嘴，放松下巴。"
+      }
+    },
+    {
+      "id": "vowel_e_u",
+      "order": 4,
+      "title": { "zh": "E 与 U 交替", "en": "E to U" },
+      "preferredMode": "guided",
+      "activeMs": 20000,
+      "repeat": 5,
+      "phaseSchedule": [
+        { "phase": "e", "durationMs": 2000, "cue": { "zh": "E：嘴角轻轻展开", "en": "E: widen gently" } },
+        { "phase": "u", "durationMs": 2000, "cue": { "zh": "U：慢慢收圆",     "en": "U: round slowly" } }
+      ],
+      "script": {
+        "introZh": "嘴角展开做 E，再收圆做 U，牙齿不要用力咬紧。",
+        "outroZh": "放松嘴角。"
+      }
+    },
+    {
+      "id": "tongue_inner_cheek",
+      "order": 5,
+      "title": { "zh": "闭嘴舌头沿两侧移动", "en": "Tongue along inner cheeks" },
+      "preferredMode": "guided",
+      "activeMs": 24000,
+      "repeat": 2,
+      "phaseSchedule": [
+        { "phase": "left_up",    "durationMs": 3000, "cue": { "zh": "沿左侧向上", "en": "Left side, up" } },
+        { "phase": "left_down",  "durationMs": 3000, "cue": { "zh": "沿左侧向下", "en": "Left side, down" } },
+        { "phase": "right_up",   "durationMs": 3000, "cue": { "zh": "换右侧向上", "en": "Right side, up" } },
+        { "phase": "right_down", "durationMs": 3000, "cue": { "zh": "右侧向下",   "en": "Right side, down" } }
+      ],
+      "script": {
+        "introZh": "轻轻闭嘴，用舌尖接触一侧脸颊内侧，不要用力顶。",
+        "outroZh": "舌头回到放松位置。"
+      }
+    },
+    {
+      "id": "air_side_to_side",
+      "order": 6,
+      "title": { "zh": "含气左右移动", "en": "Air side to side" },
+      "preferredMode": "guided",
+      "activeMs": 20000,
+      "repeat": 5,
+      "phaseSchedule": [
+        { "phase": "left",  "durationMs": 2000, "cue": { "zh": "空气移到左颊", "en": "Air to left cheek" } },
+        { "phase": "right", "durationMs": 2000, "cue": { "zh": "移到右颊",     "en": "Move to right cheek" } }
+      ],
+      "script": {
+        "introZh": "轻轻闭嘴，让少量空气鼓起一侧脸颊，再移到另一侧。",
+        "outroZh": "轻轻放松，把气放掉。"
+      }
+    },
+    {
+      "id": "cheek_draw_in",
+      "order": 7,
+      "title": { "zh": "缩两腮：重复后保持", "en": "Draw in, release, then hold" },
+      "preferredMode": "guided",
+      "activeMs": 20000,
+      "repeat": 3,
+      "phaseSchedule": [
+        { "phase": "draw_in", "durationMs": 2000, "cue": { "zh": "两颊向内收", "en": "Draw cheeks in" } },
+        { "phase": "release", "durationMs": 2000, "cue": { "zh": "慢慢放松",   "en": "Slowly release" } }
+      ],
+      "afterRepeats": [
+        { "phase": "hold", "durationMs": 8000, "cue": { "zh": "再轻轻收进去，舒适地保持", "en": "Draw in and hold comfortably" } }
+      ],
+      "holdFinalCue": { "atMs": 6000, "zh": "准备放松", "en": "Get ready to release" },
+      "script": {
+        "introZh": "嘴唇轻合，两颊轻轻向内收；先重复，再舒适地保持。",
+        "outroZh": "慢慢放松嘴唇和脸颊。"
+      }
+    }
+  ]
+}
