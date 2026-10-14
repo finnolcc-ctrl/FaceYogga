@@ -44,7 +44,62 @@ const STICKER_SLOTS = {
   chin_l:        { anchor: 148, size: 36, offset: [-6, 8],  imageUrl: "stickers/chin.svg"   },
   chin_r:        { anchor: 377, size: 36, offset: [ 6, 8],  imageUrl: "stickers/chin.svg"   },
 };
-const StickerCache = {};  // url -> HTMLImageElement
+// StickerLayer manages HTML img elements positioned over the mesh.
+// Keeps SVG fidelity (gradients + filters + foreignObject all render natively).
+class StickerLayer {
+  constructor(containerId) {
+    this.container = document.getElementById(containerId);
+    this.imgs = {};
+    this.built = false;
+  }
+  ensureBuilt() {
+    if (this.built || !this.container) return;
+    for (const key in STICKER_SLOTS) {
+      const slot = STICKER_SLOTS[key];
+      if (!slot.imageUrl) continue;
+      const img = document.createElement("img");
+      img.src = slot.imageUrl;
+      img.alt = "";
+      this.container.appendChild(img);
+      this.imgs[key] = img;
+    }
+    this.built = true;
+  }
+  update(landmarks, canvas) {
+    if (!this.container) return;
+    if (!landmarks?.length || !canvas) {
+      this.container.classList.remove("on");
+      return;
+    }
+    this.ensureBuilt();
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+    if (!w || !h) return;
+    const pts = landmarks[0];
+    const eyeL = pts[33], eyeR = pts[263];
+    const eyeDist = eyeL && eyeR
+      ? Math.hypot((eyeR.x - eyeL.x) * w, (eyeR.y - eyeL.y) * h)
+      : 160;
+    const scale = eyeDist / 160;
+    for (const key in STICKER_SLOTS) {
+      const slot = STICKER_SLOTS[key];
+      const img = this.imgs[key];
+      if (!img) continue;
+      const p = pts[slot.anchor];
+      if (!p) continue;
+      const size = slot.size * scale;
+      const [ox, oy] = slot.offset || [0, 0];
+      // Mirror X because the display video has CSS scaleX(-1)
+      const cx = (1 - p.x) * w + ox * scale;
+      const cy = p.y * h + oy * scale;
+      img.style.width = `${size}px`;
+      img.style.height = `${size}px`;
+      img.style.transform = `translate3d(${cx}px, ${cy}px, 0) translate(-50%, -50%)`;
+    }
+    this.container.classList.add("on");
+  }
+}
+const Stickers = { setup: null, exercise: null };
 
 // -------- State --------
 const State = {
@@ -216,6 +271,7 @@ async function beginCameraSetup() {
 
 function runSetupLoop(videoEl, statusEl, ovalEl) {
   const meshEl = document.getElementById("setupMesh");
+  if (!Stickers.setup) Stickers.setup = new StickerLayer("setupStickers");
   let stableStart = 0;
   let lastVidTime = -1;
   const tick = () => {
@@ -226,6 +282,7 @@ function runSetupLoop(videoEl, statusEl, ovalEl) {
         const res = State.landmarker.detectForVideo(videoEl, performance.now());
         const hasFace = res.faceLandmarks?.length > 0;
         drawMesh(meshEl, videoEl, res.faceLandmarks);
+        Stickers.setup.update(res.faceLandmarks, meshEl);
         if (hasFace) {
           meshEl.classList.add("on");
           ovalEl.classList.add("ok");
@@ -258,10 +315,12 @@ function runExerciseMeshLoop() {
   const videoEl = document.getElementById("exerciseVideo");
   const meshEl  = document.getElementById("exerciseMesh");
   if (!State.landmarker || !State.cameraStream) return;
+  if (!Stickers.exercise) Stickers.exercise = new StickerLayer("exerciseStickers");
   let lastVidTime = -1;
   const tick = () => {
     if (!State.session || State.mode !== "camera_assisted_candidate") {
       meshEl.classList.remove("on");
+      Stickers.exercise.update(null, meshEl);
       return;
     }
     State.timers.mesh = requestAnimationFrame(tick);
@@ -270,6 +329,7 @@ function runExerciseMeshLoop() {
       try {
         const res = State.landmarker.detectForVideo(videoEl, performance.now());
         drawMesh(meshEl, videoEl, res.faceLandmarks);
+        Stickers.exercise.update(res.faceLandmarks, meshEl);
         if (res.faceLandmarks?.length) meshEl.classList.add("on");
         else meshEl.classList.remove("on");
       } catch {}
@@ -807,10 +867,8 @@ function drawMesh(canvas, video, landmarks) {
   const w = video.videoWidth, h = video.videoHeight;
   ctx.clearRect(0, 0, w, h);
   if (!landmarks || !landmarks.length) return;
-
   const pts = landmarks[0];
 
-  // Lines first (so dots sit on top)
   ctx.strokeStyle = "rgba(255,255,255,0.55)";
   ctx.lineWidth = Math.max(1, w / 640);
   ctx.lineCap = "round";
@@ -823,7 +881,6 @@ function drawMesh(canvas, video, landmarks) {
   }
   ctx.stroke();
 
-  // Dots
   ctx.fillStyle = "#fff";
   const r = Math.max(2.5, w / 240);
   for (const idx of MESH_POINTS) {
@@ -833,39 +890,7 @@ function drawMesh(canvas, video, landmarks) {
     ctx.arc(p.x * w, p.y * h, r, 0, Math.PI * 2);
     ctx.fill();
   }
-
-  // Stickers (scaled by eye distance to track face size)
-  const eyeL = pts[33], eyeR = pts[263];
-  const eyeDist = eyeL && eyeR
-    ? Math.hypot((eyeR.x - eyeL.x) * w, (eyeR.y - eyeL.y) * h)
-    : 160;
-  const scale = eyeDist / 160;
-
-  for (const key in STICKER_SLOTS) {
-    const slot = STICKER_SLOTS[key];
-    const img = slot.imageUrl ? StickerCache[slot.imageUrl] : null;
-    if (!img || !img.complete || !img.naturalWidth) continue;
-    const p = pts[slot.anchor];
-    if (!p) continue;
-    const size = slot.size * scale;
-    const [ox, oy] = slot.offset || [0, 0];
-    const cx = p.x * w + ox * scale;
-    const cy = p.y * h + oy * scale;
-    ctx.drawImage(img, cx - size / 2, cy - size / 2, size, size);
-  }
-}
-
-function preloadStickers() {
-  for (const key in STICKER_SLOTS) {
-    const url = STICKER_SLOTS[key].imageUrl;
-    if (!url || StickerCache[url]) continue;
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.src = url;
-    StickerCache[url] = img;
-  }
 }
 
 // Signal readiness for diagnostics
 window.__appReady = true;
-preloadStickers();

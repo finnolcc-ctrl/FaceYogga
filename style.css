@@ -438,8 +438,27 @@ ul, ol { list-style: none; }
 .mesh-canvas.on { opacity: 1; }
 .mesh-canvas-soft.on { opacity: .55; }
 #exerciseMesh { z-index: 2; }
-.exercise-body { z-index: 3 !important; }
-.topbar-exercise { z-index: 4 !important; }
+.exercise-body { z-index: 4 !important; }
+.topbar-exercise { z-index: 5 !important; }
+
+.sticker-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity .4s ease;
+  z-index: 3;
+}
+.sticker-layer.on { opacity: 1; }
+.sticker-layer img {
+  position: absolute;
+  top: 0; left: 0;
+  display: block;
+  will-change: transform;
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,.35));
+}
+#exerciseStickers.on { opacity: .9; }
 .face-oval {
   position: absolute;
   inset: 12%;
