@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
@@ -30,58 +30,58 @@
     <article class="hero glass" id="streakHero">
       <div class="hero-aurora" aria-hidden="true"></div>
       <div class="hero-top">
-        <span class="eyebrow">今日练习 · Day <span id="streakDay">1</span></span>
-        <span class="pill pill-ghost" id="streakPill">— 天连续</span>
+        <span class="eyebrow">Today · Day <span id="streakDay">1</span></span>
+        <span class="pill pill-ghost" id="streakPill">first day</span>
       </div>
       <div class="hero-body">
-        <h1 class="hero-title">安静地照顾<br>你的脸</h1>
-        <p class="hero-sub">七组动作，约 4–5 分钟。无评分，只跟练。</p>
+        <h1 class="hero-title">Quietly care<br>for your face</h1>
+        <p class="hero-sub">Seven moves, about 4–5 minutes. No scoring, just follow along.</p>
       </div>
       <button class="btn btn-primary" data-action="startSession">
-        <span>开始今天的练习</span>
+        <span>Start today's practice</span>
         <span class="arrow">→</span>
       </button>
     </article>
 
     <section class="tile-grid">
       <article class="tile glass" aria-label="Weekly rhythm">
-        <span class="tile-label">本周</span>
+        <span class="tile-label">This week</span>
         <div class="weekdots" id="weekDots"></div>
-        <span class="tile-sub" id="weekSummary">开始第一次</span>
+        <span class="tile-sub" id="weekSummary">Start your first</span>
       </article>
       <article class="tile glass" aria-label="Total sessions">
-        <span class="tile-label">累计</span>
-        <div class="tile-num"><span id="totalSessions">0</span><em>次</em></div>
-        <span class="tile-sub">完成的练习</span>
+        <span class="tile-label">Total</span>
+        <div class="tile-num"><span id="totalSessions">0</span><em>sessions</em></div>
+        <span class="tile-sub">completed</span>
       </article>
     </section>
 
     <article class="tile tile-wide glass">
       <div class="tile-wide-head">
-        <span class="tile-label">今日流程</span>
-        <span class="pill pill-ghost">7 组 · ~4 分钟</span>
+        <span class="tile-label">Today's flow</span>
+        <span class="pill pill-ghost">7 moves · ~4 min</span>
       </div>
       <ul class="moves-mini" id="movesPreviewHome"></ul>
     </article>
 
-    <p class="footnote">视频只在你的手机上处理，不会上传。</p>
+    <p class="footnote">Video is processed on your phone. Nothing uploaded.</p>
   </section>
 
   <!-- ============ PREVIEW ============ -->
   <section class="screen" data-screen="preview" hidden>
     <header class="topbar">
-      <button class="icon-btn" data-action="goHome" aria-label="返回">←</button>
-      <span class="brand">今日流程</span>
+      <button class="icon-btn" data-action="goHome" aria-label="Back">←</button>
+      <span class="brand">Today's flow</span>
       <span></span>
     </header>
 
-    <h1 class="screen-title">七组动作<br><em>轻轻跟着做</em></h1>
+    <h1 class="screen-title">Seven moves<br><em>follow along gently</em></h1>
 
     <ol class="moves-full" id="movesListFull"></ol>
 
     <div class="screen-cta">
       <button class="btn btn-primary" data-action="toCameraChoice">
-        <span>继续</span><span class="arrow">→</span>
+        <span>Continue</span><span class="arrow">→</span>
       </button>
     </div>
   </section>
@@ -89,26 +89,26 @@
   <!-- ============ CAMERA CHOICE ============ -->
   <section class="screen" data-screen="cameraChoice" hidden>
     <header class="topbar">
-      <button class="icon-btn" data-action="toPreview" aria-label="返回">←</button>
-      <span class="brand">选择模式</span>
+      <button class="icon-btn" data-action="toPreview" aria-label="Back">←</button>
+      <span class="brand">Choose mode</span>
       <span></span>
     </header>
 
-    <h1 class="screen-title">想开摄像头吗？</h1>
-    <p class="screen-sub">两种都可以完成完整练习。摄像头只用来帮你看自己，不用来打分。</p>
+    <h1 class="screen-title">Turn on the camera?</h1>
+    <p class="screen-sub">Both work. The camera is only your reflection — it does not score you in this build.</p>
 
     <div class="mode-cards">
       <button class="mode-card glass" data-action="chooseCamera">
-        <span class="mode-badge experimental">实验性</span>
-        <h3>镜子模式</h3>
-        <p>打开前置摄像头，自己能看到动作。<br>当前版本不自动计数、不显示准确率。</p>
-        <span class="mode-cta">用摄像头 →</span>
+        <span class="mode-badge experimental">Experimental</span>
+        <h3>Mirror mode</h3>
+        <p>Opens your front camera so you can see yourself.<br>Does not auto-count cycles or show accuracy.</p>
+        <span class="mode-cta">Use camera →</span>
       </button>
       <button class="mode-card glass" data-action="chooseGuided">
-        <span class="mode-badge">推荐</span>
-        <h3>跟练模式</h3>
-        <p>只跟着节拍和提示做动作，不需要摄像头。<br>每组结束自己确认一下。</p>
-        <span class="mode-cta">开始跟练 →</span>
+        <span class="mode-badge">Recommended</span>
+        <h3>Guided mode</h3>
+        <p>Follow the rhythm and cues, no camera needed.<br>Confirm after each move.</p>
+        <span class="mode-cta">Start guided →</span>
       </button>
     </div>
   </section>
@@ -116,55 +116,54 @@
   <!-- ============ SETUP CHECK ============ -->
   <section class="screen" data-screen="setup" hidden>
     <header class="topbar">
-      <button class="icon-btn" data-action="toCameraChoice" aria-label="返回">←</button>
-      <span class="brand">准备中</span>
+      <button class="icon-btn" data-action="toCameraChoice" aria-label="Back">←</button>
+      <span class="brand">Getting ready</span>
       <span></span>
     </header>
 
     <div class="camera-stage">
       <video id="setupVideo" playsinline autoplay muted></video>
       <div class="face-oval" id="faceOval"></div>
-      <div class="setup-status glass" id="setupStatus">正在打开摄像头…</div>
+      <div class="setup-status glass" id="setupStatus">Opening camera…</div>
     </div>
 
     <div class="screen-cta">
-      <button class="btn btn-ghost" data-action="chooseGuided">改为无摄像头</button>
+      <button class="btn btn-ghost" data-action="chooseGuided">Switch to no-camera</button>
     </div>
   </section>
 
   <!-- ============ CALIBRATION ============ -->
   <section class="screen" data-screen="calibration" hidden>
     <header class="topbar">
-      <button class="icon-btn" data-action="chooseCamera" aria-label="重新设置">↺</button>
-      <span class="brand">校准</span>
-      <button class="icon-btn" data-action="skipCalibration" aria-label="跳过">↷</button>
+      <button class="icon-btn" data-action="chooseCamera" aria-label="Restart">↺</button>
+      <span class="brand">Calibrating</span>
+      <button class="icon-btn" data-action="skipCalibration" aria-label="Skip">↷</button>
     </header>
 
     <div class="calib-stage">
       <div class="breath-ring" id="calibRing"></div>
       <div class="calib-copy">
         <span class="eyebrow" id="calibStep">1 / 4</span>
-        <h2 id="calibCue">保持自然放松的脸</h2>
-        <p id="calibSub">2 秒</p>
+        <h2 id="calibCue">Keep a relaxed, natural face</h2>
+        <p id="calibSub">2 seconds</p>
       </div>
     </div>
 
-    <p class="footnote">校准数值只保存在你的手机，不会上传。</p>
+    <p class="footnote">Calibration data stays on your phone.</p>
   </section>
 
   <!-- ============ EXERCISE ============ -->
   <section class="screen screen-exercise" data-screen="exercise" hidden>
-    <!-- camera layer (behind UI) -->
     <video id="exerciseVideo" playsinline autoplay muted></video>
     <div class="exercise-dim" aria-hidden="true"></div>
 
     <header class="topbar topbar-exercise">
-      <button class="icon-btn glass-chip" data-action="togglePause" id="pauseBtn" aria-label="暂停">II</button>
+      <button class="icon-btn glass-chip" data-action="togglePause" id="pauseBtn" aria-label="Pause">II</button>
       <div class="session-progress">
         <span class="eyebrow"><span id="moveIndex">1</span> / 7</span>
         <div class="progress-track"><div class="progress-fill" id="sessionProgress"></div></div>
       </div>
-      <button class="icon-btn glass-chip" data-action="endSession" aria-label="结束">×</button>
+      <button class="icon-btn glass-chip" data-action="endSession" aria-label="End">×</button>
     </header>
 
     <div class="exercise-body">
@@ -178,7 +177,7 @@
       </div>
 
       <div class="phase-copy">
-        <span class="pill" id="stageLabel">准备</span>
+        <span class="pill" id="stageLabel">Ready</span>
         <h2 class="phase-cue" id="phaseCue">—</h2>
         <p class="phase-sub" id="phaseSub">—</p>
       </div>
@@ -187,35 +186,32 @@
     </div>
 
     <footer class="exercise-footer">
-      <button class="btn btn-ghost small" data-action="replayDemo">重看示范</button>
-      <button class="btn btn-ghost small" data-action="skipMove">跳过</button>
+      <button class="btn btn-ghost small" data-action="replayDemo">Replay demo</button>
+      <button class="btn btn-ghost small" data-action="skipMove">Skip</button>
     </footer>
 
-    <!-- Self-check overlay (shown after active) -->
     <div class="selfcheck glass" id="selfcheck" hidden>
-      <h3 id="selfcheckQ">这组跟完了吗？</h3>
+      <h3 id="selfcheckQ">Did you follow along?</h3>
       <div class="selfcheck-opts">
-        <button class="btn btn-primary" data-action="selfCompleted">完成了</button>
-        <button class="btn btn-ghost" data-action="selfRetry">再来一次</button>
-        <button class="btn btn-ghost" data-action="selfSkip">跳过</button>
+        <button class="btn btn-primary" data-action="selfCompleted">Completed</button>
+        <button class="btn btn-ghost" data-action="selfRetry">Try again</button>
+        <button class="btn btn-ghost" data-action="selfSkip">Skip</button>
       </div>
     </div>
 
-    <!-- Pause overlay -->
     <div class="pause-overlay glass" id="pauseOverlay" hidden>
-      <h3>暂停</h3>
-      <p>节拍、提示和计时都已停下。</p>
-      <button class="btn btn-primary" data-action="resume">继续</button>
-      <button class="btn btn-ghost" data-action="endSession">结束练习</button>
+      <h3>Paused</h3>
+      <p>The rhythm, cues and timer are stopped.</p>
+      <button class="btn btn-primary" data-action="resume">Continue</button>
+      <button class="btn btn-ghost" data-action="endSession">End session</button>
     </div>
 
-    <!-- Replay-demo overlay -->
     <div class="demo-overlay" id="demoOverlay" hidden>
       <div class="demo-ring"></div>
-      <span class="eyebrow">示范</span>
+      <span class="eyebrow">Demo</span>
       <h3 id="demoTitle">—</h3>
       <p id="demoCue">—</p>
-      <button class="btn btn-ghost small" data-action="demoDone">好了</button>
+      <button class="btn btn-ghost small" data-action="demoDone">Got it</button>
     </div>
   </section>
 
@@ -223,38 +219,37 @@
   <section class="screen" data-screen="report" hidden>
     <header class="topbar">
       <span></span>
-      <span class="brand">本次练习</span>
+      <span class="brand">This session</span>
       <span></span>
     </header>
 
     <article class="hero glass report-hero">
       <div class="hero-aurora bloom" aria-hidden="true"></div>
-      <span class="eyebrow">完成于 <span id="reportTime">—</span></span>
-      <h1 class="hero-title big" id="reportHeadline">好好休息了<br>一次</h1>
+      <span class="eyebrow">Finished at <span id="reportTime">—</span></span>
+      <h1 class="hero-title big" id="reportHeadline">A quiet<br>pause</h1>
       <p class="hero-sub" id="reportSub">—</p>
       <div class="report-stats">
-        <div><strong id="reportCompleted">0</strong><em>完成</em></div>
-        <div><strong id="reportPartial">0</strong><em>部分</em></div>
-        <div><strong id="reportSkipped">0</strong><em>跳过</em></div>
+        <div><strong id="reportCompleted">0</strong><em>Completed</em></div>
+        <div><strong id="reportPartial">0</strong><em>Partial</em></div>
+        <div><strong id="reportSkipped">0</strong><em>Skipped</em></div>
       </div>
     </article>
 
     <ul class="moves-full moves-report" id="reportList"></ul>
 
     <article class="tile tile-wide glass streak-card">
-      <span class="tile-label">连续练习</span>
-      <div class="tile-num"><span id="reportStreak">1</span><em>天</em></div>
-      <span class="tile-sub" id="streakNote">保持这个节奏就好</span>
+      <span class="tile-label">Streak</span>
+      <div class="tile-num"><span id="reportStreak">1</span><em>days</em></div>
+      <span class="tile-sub" id="streakNote">Keep this pace</span>
     </article>
 
     <div class="screen-cta">
-      <button class="btn btn-primary" data-action="goHome">完成</button>
+      <button class="btn btn-primary" data-action="goHome">Done</button>
     </div>
 
-    <p class="footnote">所有记录只保存在你的手机。</p>
+    <p class="footnote">All records stay on your phone.</p>
   </section>
 
-  <!-- ============ DIAG (collapsible) ============ -->
   <p id="diag" class="diag-strip" hidden></p>
 
 </main>

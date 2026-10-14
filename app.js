@@ -91,7 +91,7 @@ function renderHome() {
 
   document.getElementById("homeDate").textContent = formatDate(new Date());
   document.getElementById("streakDay").textContent = Math.max(1, streak);
-  document.getElementById("streakPill").textContent = streak > 0 ? `${streak} 天连续` : "开启第一天";
+  document.getElementById("streakPill").textContent = streak > 0 ? `${streak}-day streak` : "First day";
   document.getElementById("totalSessions").textContent = total;
 
   // Week dots: 7 days ending today
@@ -111,14 +111,14 @@ function renderHome() {
     const dt = new Date(d);
     return (today - dt) <= 6 * 86400000;
   }).length;
-  document.getElementById("weekSummary").textContent = doneThisWeek > 0 ? `这周 ${doneThisWeek} 次` : "开始第一次";
+  document.getElementById("weekSummary").textContent = doneThisWeek > 0 ? `${doneThisWeek} this week` : "Start your first";
 
   // Mini moves preview
   const list = document.getElementById("movesPreviewHome");
   list.innerHTML = "";
   State.routine.moves.forEach((m) => {
     const li = document.createElement("li");
-    li.innerHTML = `<span class="idx">${m.order}</span><span>${m.title.zh}</span><span class="dur">${Math.round(m.activeMs/1000)}s</span>`;
+    li.innerHTML = `<span class="idx">${m.order}</span><span>${m.title.en}</span><span class="dur">${Math.round(m.activeMs/1000)}s</span>`;
     list.appendChild(li);
   });
 }
@@ -128,11 +128,11 @@ function renderPreviewList() {
   list.innerHTML = "";
   State.routine.moves.forEach((m) => {
     const li = document.createElement("li");
-    const mode = m.preferredMode === "camera_assisted_candidate" ? "可选摄像头" : "跟练";
+    const mode = m.preferredMode === "camera_assisted_candidate" ? "Optional camera" : "Guided";
     li.innerHTML = `
       <span class="idx">${m.order}</span>
       <span class="meta">
-        <span class="ttl">${m.title.zh}</span>
+        <span class="ttl">${m.title.en}</span>
         <span class="mode">${mode}</span>
       </span>
       <span class="time">${Math.round(m.activeMs/1000)}s</span>
@@ -152,7 +152,7 @@ async function beginCameraSetup() {
   ovalEl.classList.remove("ok");
 
   try {
-    statusEl.textContent = "请求摄像头权限…";
+    statusEl.textContent = "Requesting camera…";
     State.cameraStream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
       audio: false,
@@ -160,7 +160,7 @@ async function beginCameraSetup() {
     videoEl.srcObject = State.cameraStream;
     await videoEl.play().catch(()=>{});
 
-    statusEl.textContent = "加载识别模型…";
+    statusEl.textContent = "Loading model…";
     if (!State.landmarker) {
       const vision = await FilesetResolver.forVisionTasks(
         `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VERSION}/wasm`
@@ -175,7 +175,7 @@ async function beginCameraSetup() {
 
     runSetupLoop(videoEl, statusEl, ovalEl);
   } catch (e) {
-    statusEl.textContent = "摄像头无法打开，可切换为跟练模式。";
+    statusEl.textContent = "Camera unavailable — you can switch to guided mode.";
     showDiag("camera error: " + e.message);
   }
 }
@@ -195,9 +195,9 @@ function runSetupLoop(videoEl, statusEl, ovalEl) {
           if (!stableStart) stableStart = performance.now();
           const held = performance.now() - stableStart;
           if (held < 2000) {
-            statusEl.textContent = `保持住…${Math.ceil((2000 - held) / 1000)}s`;
+            statusEl.textContent = `Hold still…${Math.ceil((2000 - held) / 1000)}s`;
           } else {
-            statusEl.textContent = "好了，开始校准";
+            statusEl.textContent = "Looking good — calibrating next";
             cancelAnimationFrame(State.timers.setup);
             setTimeout(() => beginCalibration(), 500);
             return;
@@ -205,7 +205,7 @@ function runSetupLoop(videoEl, statusEl, ovalEl) {
         } else {
           ovalEl.classList.remove("ok");
           stableStart = 0;
-          statusEl.textContent = "把脸放进圆圈";
+          statusEl.textContent = "Fit your face in the circle";
         }
       } catch (e) {
         showDiag("detect error: " + e.message);
@@ -220,10 +220,10 @@ function runSetupLoop(videoEl, statusEl, ovalEl) {
 function beginCalibration() {
   show("calibration");
   const steps = [
-    { label: "1 / 4", cue: "保持自然放松的脸", sub: "2 秒 · 中立" },
-    { label: "2 / 4", cue: "张开嘴做 A",        sub: "2 秒 · 不发声" },
-    { label: "3 / 4", cue: "嘴唇收圆做 U",      sub: "2 秒 · 轻轻收圆" },
-    { label: "4 / 4", cue: "嘴角展开做 E",      sub: "2 秒 · 不咬牙" },
+    { label: "1 / 4", cue: "Keep a relaxed natural face", sub: "2 seconds · neutral" },
+    { label: "2 / 4", cue: "Open your mouth for A",       sub: "2 seconds · no sound" },
+    { label: "3 / 4", cue: "Round your lips for U",       sub: "2 seconds · gently" },
+    { label: "4 / 4", cue: "Widen the corners for E",     sub: "2 seconds · no clenching" },
   ];
   let i = 0;
   const run = () => {
@@ -335,9 +335,9 @@ function updateSessionProgress() {
 // --- Demo phase ---
 function runDemo(move) {
   const demoMs = State.routine.defaults.demoMs;
-  setStageLabel("示范");
-  document.getElementById("phaseCue").textContent = move.title.zh;
-  document.getElementById("phaseSub").textContent = move.script.introZh;
+  setStageLabel("Demo");
+  document.getElementById("phaseCue").textContent = move.title.en;
+  document.getElementById("phaseSub").textContent = move.script.introEn;
   setPhaseVisual(demoVisualFor(move.id));
   renderRhythmDots(cycleCountFor(move), -1);
 
@@ -346,10 +346,10 @@ function runDemo(move) {
 
 function runReady(move) {
   const readyMs = State.routine.defaults.readyMs;
-  setStageLabel("准备");
+  setStageLabel("Ready");
   let left = Math.ceil(readyMs / 1000);
   document.getElementById("phaseCue").textContent = `${left}`;
-  document.getElementById("phaseSub").textContent = move.script.introZh;
+  document.getElementById("phaseSub").textContent = move.script.introEn;
   setPhaseVisual("ready");
 
   State.timers.ready = setInterval(() => {
@@ -369,7 +369,7 @@ function runActive(move) {
   const s = State.session;
   const moveState = s.moves[s.moveIndex];
 
-  setStageLabel("跟着做");
+  setStageLabel("Follow");
   renderRhythmDots(cycleCountFor(move), 0);
 
   let i = 0;
@@ -388,8 +388,8 @@ function runActive(move) {
       return;
     }
     const p = sched[i];
-    document.getElementById("phaseCue").textContent = p.cue.zh;
-    document.getElementById("phaseSub").textContent = p.cue.en;
+    document.getElementById("phaseCue").textContent = p.cue.en;
+    document.getElementById("phaseSub").textContent = "";
     setPhaseVisual(phaseVisualFor(move.id, p.phase));
 
     // Light up current cycle dot
@@ -439,9 +439,9 @@ function cycleCountFor(move) {
 
 // --- Self check overlay ---
 function showSelfCheck(move) {
-  setStageLabel("完成了吗");
+  setStageLabel("Done?");
   setPhaseVisual("done");
-  document.getElementById("phaseCue").textContent = move.script.outroZh;
+  document.getElementById("phaseCue").textContent = move.script.outroEn;
   document.getElementById("phaseSub").textContent = "";
   document.getElementById("selfcheck").hidden = false;
 }
@@ -464,7 +464,7 @@ function handleSelfResult(status) {
   moveState.endedAt = new Date().toISOString();
 
   // Short rest with outro
-  setStageLabel("休息");
+  setStageLabel("Rest");
   const restMs = Math.min(2500, State.routine.defaults.resultRestMs);
   State.timers.rest = setTimeout(() => nextMove(), restMs);
 }
@@ -487,8 +487,8 @@ function showDemoOverlay() {
   const s = State.session;
   if (!s) return;
   const m = State.routine.moves[s.moveIndex];
-  document.getElementById("demoTitle").textContent = m.title.zh;
-  document.getElementById("demoCue").textContent = m.script.introZh;
+  document.getElementById("demoTitle").textContent = m.title.en;
+  document.getElementById("demoCue").textContent = m.script.introEn;
   document.getElementById("demoOverlay").hidden = false;
   pauseExercise(true);
 }
@@ -565,15 +565,15 @@ function renderReport(session, data) {
   document.getElementById("reportSkipped").textContent = skipped;
   document.getElementById("reportStreak").textContent = data.streak || 0;
 
-  const headline = completed === 7 ? "全部做完了<br>七组" :
-                  completed > 0   ? `做完了<br>${completed} 组` :
-                                    "下次再来<br>也可以";
+  const headline = completed === 7 ? "You did<br>all seven" :
+                  completed > 0   ? `You did<br>${completed} ${completed === 1 ? "move" : "moves"}` :
+                                    "Next time<br>works too";
   document.getElementById("reportHeadline").innerHTML = headline;
   document.getElementById("reportSub").textContent =
-    session.partial ? "部分完成也算数" : "放松一下，呼吸几次";
+    session.partial ? "Partial counts too" : "Breathe, relax a moment";
 
   document.getElementById("streakNote").textContent =
-    (data.streak || 0) >= 3 ? "节奏很稳" : "保持这个节奏就好";
+    (data.streak || 0) >= 3 ? "Nice rhythm" : "Keep this pace";
 
   const list = document.getElementById("reportList");
   list.innerHTML = "";
@@ -581,13 +581,13 @@ function renderReport(session, data) {
     const def = State.routine.moves[i];
     const chip = m.status === "completed" ? "completed" :
                  m.status === "partial"   ? "partial"   : "skipped";
-    const label = m.status === "completed" ? "完成" :
-                  m.status === "partial"   ? "部分" :
-                  m.status === "skipped"   ? "跳过" : "未做";
+    const label = m.status === "completed" ? "Completed" :
+                  m.status === "partial"   ? "Partial" :
+                  m.status === "skipped"   ? "Skipped" : "Not done";
     const li = document.createElement("li");
     li.innerHTML = `
       <span class="idx">${def.order}</span>
-      <span class="meta"><span class="ttl">${def.title.zh}</span></span>
+      <span class="meta"><span class="ttl">${def.title.en}</span></span>
       <span class="status-chip ${chip}">${label}</span>
     `;
     list.appendChild(li);
@@ -708,10 +708,10 @@ function dayDiff(a, b) {
   return Math.round((new Date(b) - new Date(a)) / 86400000);
 }
 function formatDate(d) {
-  return d.toLocaleDateString("zh-CN", { month: "short", day: "numeric", weekday: "short" });
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", weekday: "short" });
 }
 function formatTime(d) {
-  return d.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
 }
 function showDiag(msg) {
   const el = document.getElementById("diag");

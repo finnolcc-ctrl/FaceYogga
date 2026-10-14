@@ -47,7 +47,9 @@
       ],
       "script": {
         "introZh": "轻轻撅起嘴唇，脸朝向镜头。头尽量保持不动。",
-        "outroZh": "回到中间，放松。"
+        "outroZh": "回到中间，放松。",
+        "introEn": "Gently pucker your lips, face the camera. Keep your head still.",
+        "outroEn": "Back to center, relax."
       }
     },
     {
@@ -66,7 +68,9 @@
       "reversePhaseOrder": ["left", "down", "right", "up"],
       "script": {
         "introZh": "轻轻撅嘴，跟着圆点画小圈，不要用转头代替。",
-        "outroZh": "回到中间，放松嘴唇。"
+        "outroZh": "回到中间，放松嘴唇。",
+        "introEn": "Pucker gently, follow the dot in small circles. Don't move your head.",
+        "outroEn": "Back to center, relax your lips."
       }
     },
     {
@@ -82,7 +86,9 @@
       ],
       "script": {
         "introZh": "先张开嘴做 A，再把嘴唇收圆做 U，不需要发声。",
-        "outroZh": "合上嘴，放松下巴。"
+        "outroZh": "合上嘴，放松下巴。",
+        "introEn": "Open your mouth for A, then round your lips for U. No sound needed.",
+        "outroEn": "Close your mouth, relax your jaw."
       }
     },
     {
@@ -98,7 +104,9 @@
       ],
       "script": {
         "introZh": "嘴角展开做 E，再收圆做 U，牙齿不要用力咬紧。",
-        "outroZh": "放松嘴角。"
+        "outroZh": "放松嘴角。",
+        "introEn": "Widen the corners for E, then round for U. Don't clench your teeth.",
+        "outroEn": "Relax the corners of your mouth."
       }
     },
     {
@@ -116,7 +124,9 @@
       ],
       "script": {
         "introZh": "轻轻闭嘴，用舌尖接触一侧脸颊内侧，不要用力顶。",
-        "outroZh": "舌头回到放松位置。"
+        "outroZh": "舌头回到放松位置。",
+        "introEn": "Close your mouth gently. Touch your tongue tip to one inner cheek — don't press hard.",
+        "outroEn": "Let your tongue return to rest."
       }
     },
     {
@@ -132,7 +142,9 @@
       ],
       "script": {
         "introZh": "轻轻闭嘴，让少量空气鼓起一侧脸颊，再移到另一侧。",
-        "outroZh": "轻轻放松，把气放掉。"
+        "outroZh": "轻轻放松，把气放掉。",
+        "introEn": "Close your mouth gently. Puff a little air into one cheek, then move it to the other.",
+        "outroEn": "Relax and let the air out gently."
       }
     },
     {
@@ -152,7 +164,9 @@
       "holdFinalCue": { "atMs": 6000, "zh": "准备放松", "en": "Get ready to release" },
       "script": {
         "introZh": "嘴唇轻合，两颊轻轻向内收；先重复，再舒适地保持。",
-        "outroZh": "慢慢放松嘴唇和脸颊。"
+        "outroZh": "慢慢放松嘴唇和脸颊。",
+        "introEn": "Lips lightly closed. Draw both cheeks inward — repeat, then hold comfortably.",
+        "outroEn": "Slowly relax your lips and cheeks."
       }
     }
   ]
