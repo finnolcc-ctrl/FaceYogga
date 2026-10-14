@@ -34,15 +34,15 @@ const MESH_CONNECTIONS = [
   [61,148],[291,377],[148,377],[148,152],[377,152],
 ];
 const STICKER_SLOTS = {
-  brow_green_l:  { anchor: 55,  size: 44, offset: [0, -6] },
-  brow_green_r:  { anchor: 285, size: 44, offset: [0, -6] },
-  temple_l:      { anchor: 70,  size: 30, offset: [-8, -2] },
-  temple_r:      { anchor: 300, size: 30, offset: [ 8, -2] },
-  cheek_star_l:  { anchor: 234, size: 38, offset: [10, 4] },
-  cheek_star_r:  { anchor: 454, size: 38, offset: [-10, 4] },
-  nose_bow:      { anchor: 1,   size: 26, offset: [0, 2] },
-  chin_l:        { anchor: 148, size: 36, offset: [-4, 8] },
-  chin_r:        { anchor: 377, size: 36, offset: [ 4, 8] },
+  brow_green_l:  { anchor: 55,  size: 44, offset: [0, -8],  imageUrl: "stickers/brow.svg"   },
+  brow_green_r:  { anchor: 285, size: 44, offset: [0, -8],  imageUrl: "stickers/brow.svg"   },
+  temple_l:      { anchor: 70,  size: 28, offset: [-10, -2],imageUrl: "stickers/temple.svg" },
+  temple_r:      { anchor: 300, size: 28, offset: [ 10, -2],imageUrl: "stickers/temple.svg" },
+  cheek_star_l:  { anchor: 234, size: 42, offset: [12, 6],  imageUrl: "stickers/cheek.svg"  },
+  cheek_star_r:  { anchor: 454, size: 42, offset: [-12, 6], imageUrl: "stickers/cheek.svg"  },
+  nose_bow:      { anchor: 1,   size: 28, offset: [0, 4],   imageUrl: "stickers/nose.svg"   },
+  chin_l:        { anchor: 148, size: 36, offset: [-6, 8],  imageUrl: "stickers/chin.svg"   },
+  chin_r:        { anchor: 377, size: 36, offset: [ 6, 8],  imageUrl: "stickers/chin.svg"   },
 };
 const StickerCache = {};  // url -> HTMLImageElement
 
