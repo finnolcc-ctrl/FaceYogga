@@ -34,16 +34,20 @@ const MESH_CONNECTIONS = [
   [61,148],[291,377],[148,377],[148,152],[377,152],
 ];
 const STICKER_SLOTS = {
-  brow_green_l:  { anchor: 55,  size: 22, offset: [0, -22], imageUrl: "stickers/brow.svg"   },
-  brow_green_r:  { anchor: 285, size: 22, offset: [0, -22], imageUrl: "stickers/brow.svg"   },
-  temple_l:      { anchor: 70,  size: 14, offset: [-16, -6],imageUrl: "stickers/temple.svg" },
-  temple_r:      { anchor: 300, size: 14, offset: [ 16, -6],imageUrl: "stickers/temple.svg" },
-  cheek_star_l:  { anchor: 234, size: 22, offset: [18, 14], imageUrl: "stickers/cheek.svg"  },
-  cheek_star_r:  { anchor: 454, size: 22, offset: [-18, 14],imageUrl: "stickers/cheek.svg"  },
-  nose_bow:      { anchor: 1,   size: 14, offset: [0, 10],  imageUrl: "stickers/nose.svg"   },
-  chin_l:        { anchor: 148, size: 18, offset: [-10, 12],imageUrl: "stickers/chin.svg"   },
-  chin_r:        { anchor: 377, size: 18, offset: [ 10, 12],imageUrl: "stickers/chin.svg"   },
+  brow_green_l:  { anchor: 55,  size: 18, offset: [0, 0],  imageUrl: "stickers/brow.svg"   },
+  brow_green_r:  { anchor: 285, size: 18, offset: [0, 0],  imageUrl: "stickers/brow.svg"   },
+  temple_l:      { anchor: 70,  size: 12, offset: [0, 0],  imageUrl: "stickers/temple.svg" },
+  temple_r:      { anchor: 300, size: 12, offset: [0, 0],  imageUrl: "stickers/temple.svg" },
+  cheek_star_l:  { anchor: 234, size: 18, offset: [0, 0],  imageUrl: "stickers/cheek.svg"  },
+  cheek_star_r:  { anchor: 454, size: 18, offset: [0, 0],  imageUrl: "stickers/cheek.svg"  },
+  nose_bow:      { anchor: 1,   size: 12, offset: [0, 0],  imageUrl: "stickers/nose.svg"   },
+  chin_l:        { anchor: 148, size: 14, offset: [0, 0],  imageUrl: "stickers/chin.svg"   },
+  chin_r:        { anchor: 377, size: 14, offset: [0, 0],  imageUrl: "stickers/chin.svg"   },
 };
+// Dots at these landmark indices get skipped — the sticker takes the dot's visual slot.
+const STICKER_ANCHORS = new Set(
+  Object.values(STICKER_SLOTS).map((s) => s.anchor)
+);
 // StickerLayer manages HTML img elements positioned over the mesh.
 // Keeps SVG fidelity (gradients + filters + foreignObject all render natively).
 class StickerLayer {
@@ -109,6 +113,7 @@ const State = {
   landmarker: null,
   session: null,           // active session object
   timers: { phase: null, active: null, demo: null, ready: null, rest: null, setup: null, mesh: null },
+  active: null,                                       // { moveId, phase } while a phase is on-screen
   paused: false,
   wakeLock: null,
 };
@@ -422,6 +427,7 @@ function startSession(mode) {
 function teardownExercise() {
   clearAllTimers();
   State.session = null;
+  State.active = null;
   State.paused = false;
   document.getElementById("pauseOverlay").hidden = true;
   document.getElementById("selfcheck").hidden = true;
@@ -518,6 +524,7 @@ function runActive(move) {
       return;
     }
     const p = sched[i];
+    State.active = { moveId: move.id, phase: p.phase };
     document.getElementById("phaseCue").textContent = p.cue.en;
     document.getElementById("phaseSub").textContent = "";
     setPhaseVisual(phaseVisualFor(move.id, p.phase));
@@ -569,6 +576,7 @@ function cycleCountFor(move) {
 
 // --- Self check overlay ---
 function showSelfCheck(move) {
+  State.active = null;
   setStageLabel("Done?");
   setPhaseVisual("done");
   document.getElementById("phaseCue").textContent = move.script.outroEn;
@@ -909,12 +917,52 @@ function drawMesh(canvas, video, landmarks) {
   ctx.fillStyle = "#fff";
   const r = Math.max(2.5, w / 240);
   for (const idx of MESH_POINTS) {
+    if (STICKER_ANCHORS.has(idx)) continue;    // the sticker is the dot here
     const p = pts[idx];
     if (!p) continue;
     ctx.beginPath();
     ctx.arc(p.x * w, p.y * h, r, 0, Math.PI * 2);
     ctx.fill();
   }
+
+  // Dotted target shape for vowel phases — the user matches their lips to this outline.
+  if (State.active) drawPhaseTarget(ctx, pts, w, h, State.active.moveId, State.active.phase);
+}
+
+function drawPhaseTarget(ctx, pts, w, h, moveId, phase) {
+  const corners = [pts[61], pts[291]];     // mouth corners L, R
+  const lips = [pts[13], pts[14]];          // upper, lower lip center
+  const eyes = [pts[33], pts[263]];         // outer eye corners
+  if (!corners[0] || !corners[1] || !lips[0] || !lips[1] || !eyes[0] || !eyes[1]) return;
+
+  const cx = ((corners[0].x + corners[1].x) / 2) * w;
+  const cy = ((lips[0].y + lips[1].y) / 2) * h;
+  const eyeDist = Math.hypot((eyes[1].x - eyes[0].x) * w, (eyes[1].y - eyes[0].y) * h);
+
+  let rx, ry;
+  switch (moveId + ":" + phase) {
+    case "vowel_a_u:a": rx = eyeDist * 0.17; ry = eyeDist * 0.22; break;  // tall open
+    case "vowel_a_u:u": rx = eyeDist * 0.09; ry = eyeDist * 0.11; break;  // small round
+    case "vowel_e_u:e": rx = eyeDist * 0.26; ry = eyeDist * 0.08; break;  // wide flat
+    case "vowel_e_u:u": rx = eyeDist * 0.09; ry = eyeDist * 0.11; break;  // small round
+    default: return;
+  }
+
+  ctx.save();
+  ctx.strokeStyle = "rgba(255,210,160,0.95)";
+  ctx.lineWidth = Math.max(1.5, w / 320);
+  ctx.setLineDash([Math.max(5, w / 110), Math.max(5, w / 140)]);
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Small label above the target so it reads at a glance
+  ctx.setLineDash([]);
+  ctx.fillStyle = "rgba(255,220,170,0.9)";
+  ctx.font = `${Math.max(14, w / 36)}px -apple-system, sans-serif`;
+  ctx.textAlign = "center";
+  ctx.fillText(phase.toUpperCase(), cx, cy - ry - Math.max(10, w / 60));
+  ctx.restore();
 }
 
 // Signal readiness for diagnostics

@@ -464,7 +464,7 @@ ul, ol { list-style: none; }
 .screen-exercise.in-camera-mode .phase-cue { font-size: 22px; }
 .screen-exercise.in-camera-mode .exercise-dim {
   background:
-    linear-gradient(180deg, rgba(0,0,0,.35) 0%, transparent 20%, transparent 55%, rgba(0,0,0,.85) 90%);
+    linear-gradient(180deg, rgba(0,0,0,.15) 0%, transparent 15%, transparent 60%, rgba(0,0,0,.75) 95%);
 }
 
 .sticker-layer {
@@ -563,11 +563,13 @@ ul, ol { list-style: none; }
   width: 100%; height: 100%;
   object-fit: cover;
   transform: scaleX(-1);
+  filter: brightness(1.18) contrast(1.05) saturate(1.1);
   z-index: 0;
   opacity: 0;
   transition: opacity .5s ease;
 }
-#exerciseVideo.show { opacity: .55; }
+#exerciseVideo.show { opacity: 1; }
+#setupVideo { filter: brightness(1.12) contrast(1.03) saturate(1.08); }
 .exercise-dim {
   position: absolute;
   inset: 0;
@@ -809,20 +811,23 @@ ul, ol { list-style: none; }
 /* overlays */
 .selfcheck, .pause-overlay, .demo-overlay {
   position: absolute;
-  z-index: 5;
+  z-index: 6;
   left: 50%;
-  transform: translateX(-50%);
-  padding: 24px 24px 20px;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  padding: 28px 24px 24px;
   text-align: center;
   width: min(360px, calc(100% - 32px));
   animation: fadeIn .35s ease both;
 }
 .selfcheck, .pause-overlay {
-  bottom: calc(env(safe-area-inset-bottom,0) + 24px);
+  background: rgba(10,10,15,.78);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--glass-border-strong);
+  backdrop-filter: blur(28px) saturate(1.3);
+  -webkit-backdrop-filter: blur(28px) saturate(1.3);
 }
 .demo-overlay {
-  top: 50%;
-  transform: translate(-50%, -50%);
   background: rgba(10,10,15,.78);
   border-radius: var(--radius-xl);
   border: 1px solid var(--glass-border);
