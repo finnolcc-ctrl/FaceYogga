@@ -114,6 +114,8 @@ const State = {
   session: null,           // active session object
   timers: { phase: null, active: null, demo: null, ready: null, rest: null, setup: null, mesh: null },
   active: null,                                       // { moveId, phase } while a phase is on-screen
+  blendshapes: {},                                    // EMA-smoothed category -> score
+  observations: null,                                 // { longestVowelMatchMs, smileWarmth }
   paused: false,
   wakeLock: null,
 };
@@ -286,6 +288,8 @@ function runSetupLoop(videoEl, statusEl, ovalEl) {
       try {
         const res = State.landmarker.detectForVideo(videoEl, performance.now());
         const hasFace = res.faceLandmarks?.length > 0;
+        readBlendshapes(res);
+        updateAurora();
         drawMesh(meshEl, videoEl, res.faceLandmarks);
         Stickers.setup.update(res.faceLandmarks, meshEl);
         if (hasFace) {
@@ -333,6 +337,8 @@ function runExerciseMeshLoop() {
       lastVidTime = videoEl.currentTime;
       try {
         const res = State.landmarker.detectForVideo(videoEl, performance.now());
+        readBlendshapes(res);
+        updateAurora();
         drawMesh(meshEl, videoEl, res.faceLandmarks);
         Stickers.exercise.update(res.faceLandmarks, meshEl);
         if (res.faceLandmarks?.length) meshEl.classList.add("on");
@@ -397,11 +403,12 @@ function startSession(mode) {
       mode,
       plannedActiveMs: m.activeMs,
       activeElapsedMs: 0,
-      status: "not_started",      // not_started | completed | partial | skipped
+      status: "not_started",
       userConfirmed: null,
       attempts: 0,
     })),
   };
+  State.observations = { matchedMs: 0, smileWarmth: 0, samples: 0 };
 
   requestWakeLock();
   show("exercise");
@@ -703,12 +710,15 @@ function renderReport(session, data) {
   document.getElementById("reportSkipped").textContent = skipped;
   document.getElementById("reportStreak").textContent = data.streak || 0;
 
-  const headline = completed === 7 ? "You did<br>all seven" :
-                  completed > 0   ? `You did<br>${completed} ${completed === 1 ? "move" : "moves"}` :
-                                    "Next time<br>works too";
+  const headline = completed === 7 ? "Today's<br>full bloom" :
+                  completed > 0   ? `A ${completed}-petal<br>bloom` :
+                                    "A quiet<br>pause";
   document.getElementById("reportHeadline").innerHTML = headline;
   document.getElementById("reportSub").textContent =
     session.partial ? "Partial counts too" : "Breathe, relax a moment";
+
+  document.getElementById("reportReflect").textContent = reflectionFor(session, data);
+  renderMandala(session);
 
   document.getElementById("streakNote").textContent =
     (data.streak || 0) >= 3 ? "Nice rhythm" : "Keep this pace";
@@ -930,39 +940,177 @@ function drawMesh(canvas, video, landmarks) {
 }
 
 function drawPhaseTarget(ctx, pts, w, h, moveId, phase) {
-  const corners = [pts[61], pts[291]];     // mouth corners L, R
-  const lips = [pts[13], pts[14]];          // upper, lower lip center
-  const eyes = [pts[33], pts[263]];         // outer eye corners
+  const corners = [pts[61], pts[291]];
+  const lips = [pts[13], pts[14]];
+  const eyes = [pts[33], pts[263]];
   if (!corners[0] || !corners[1] || !lips[0] || !lips[1] || !eyes[0] || !eyes[1]) return;
 
   const cx = ((corners[0].x + corners[1].x) / 2) * w;
   const cy = ((lips[0].y + lips[1].y) / 2) * h;
   const eyeDist = Math.hypot((eyes[1].x - eyes[0].x) * w, (eyes[1].y - eyes[0].y) * h);
 
-  let rx, ry;
+  let rx, ry, matchScore = 0;
+  const bs = State.blendshapes;
   switch (moveId + ":" + phase) {
-    case "vowel_a_u:a": rx = eyeDist * 0.17; ry = eyeDist * 0.22; break;  // tall open
-    case "vowel_a_u:u": rx = eyeDist * 0.09; ry = eyeDist * 0.11; break;  // small round
-    case "vowel_e_u:e": rx = eyeDist * 0.26; ry = eyeDist * 0.08; break;  // wide flat
-    case "vowel_e_u:u": rx = eyeDist * 0.09; ry = eyeDist * 0.11; break;  // small round
+    case "vowel_a_u:a":
+      rx = eyeDist * 0.17; ry = eyeDist * 0.22;
+      matchScore = Math.min(1, (bs.jawOpen || 0) / 0.35);
+      break;
+    case "vowel_a_u:u":
+    case "vowel_e_u:u":
+      rx = eyeDist * 0.09; ry = eyeDist * 0.11;
+      matchScore = Math.min(1, (bs.mouthPucker || 0) / 0.45);
+      break;
+    case "vowel_e_u:e":
+      rx = eyeDist * 0.26; ry = eyeDist * 0.08;
+      matchScore = Math.min(1, (((bs.mouthSmileLeft || 0) + (bs.mouthSmileRight || 0)) / 2) / 0.30);
+      break;
     default: return;
   }
 
+  // Count matched time for the final report (observable: visible lip envelope met the target).
+  if (State.observations && matchScore > 0.6) {
+    State.observations.matchedMs = (State.observations.matchedMs || 0) + 33;
+  }
+
+  // Outline shifts cool-dashed → warm-solid as the user matches the target.
+  const warm = matchScore;
+  const r = 255;
+  const g = Math.round(210 - warm * 70);
+  const b = Math.round(170 - warm * 110);
+  const alpha = 0.55 + warm * 0.4;
+
   ctx.save();
-  ctx.strokeStyle = "rgba(255,210,160,0.95)";
-  ctx.lineWidth = Math.max(1.5, w / 320);
-  ctx.setLineDash([Math.max(5, w / 110), Math.max(5, w / 140)]);
+  // soft outer halo
+  ctx.shadowColor = `rgba(${r},${g+30},${b+50},${0.3 + warm * 0.5})`;
+  ctx.shadowBlur = 12 + warm * 20;
+  ctx.strokeStyle = `rgba(${r},${g},${b},${alpha})`;
+  ctx.lineWidth = Math.max(1.5, w / 320) + warm * 2;
+  if (warm < 0.55) {
+    ctx.setLineDash([Math.max(5, w / 110), Math.max(5, w / 140)]);
+  } else {
+    ctx.setLineDash([]);
+  }
   ctx.beginPath();
   ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
   ctx.stroke();
 
-  // Small label above the target so it reads at a glance
+  // Label with the vowel; grows slightly when matched
+  ctx.shadowBlur = 0;
   ctx.setLineDash([]);
-  ctx.fillStyle = "rgba(255,220,170,0.9)";
-  ctx.font = `${Math.max(14, w / 36)}px -apple-system, sans-serif`;
+  ctx.fillStyle = `rgba(${r},${g+10},${b+30},${0.75 + warm * 0.25})`;
+  ctx.font = `${Math.max(14, w / 36) + warm * 4}px -apple-system, sans-serif`;
   ctx.textAlign = "center";
   ctx.fillText(phase.toUpperCase(), cx, cy - ry - Math.max(10, w / 60));
   ctx.restore();
+}
+
+// =====================================================
+// Aurora responder — ambient background reacts to blendshapes.
+// Writes CSS variables; CSS maps them to blob opacity, blur, hue.
+// =====================================================
+function updateAurora() {
+  const bs = State.blendshapes;
+  const smile = ((bs.mouthSmileLeft || 0) + (bs.mouthSmileRight || 0)) / 2;
+  const open  = bs.jawOpen || 0;
+  const brow  = bs.browInnerUp || 0;
+  const puck  = bs.mouthPucker || 0;
+  const root  = document.documentElement;
+  root.style.setProperty("--sm-smile", smile.toFixed(2));
+  root.style.setProperty("--sm-open",  open.toFixed(2));
+  root.style.setProperty("--sm-brow",  brow.toFixed(2));
+  root.style.setProperty("--sm-puck",  puck.toFixed(2));
+
+  if (State.observations) {
+    State.observations.smileWarmth = (State.observations.smileWarmth || 0) + smile;
+    State.observations.samples = (State.observations.samples || 0) + 1;
+  }
+}
+
+function readBlendshapes(result) {
+  const cats = result.faceBlendshapes?.[0]?.categories;
+  if (!cats) return;
+  const alpha = 0.35;
+  for (const c of cats) {
+    const prev = State.blendshapes[c.categoryName] || 0;
+    State.blendshapes[c.categoryName] = prev + alpha * (c.score - prev);
+  }
+}
+
+// =====================================================
+// Session mandala — one petal per move, colored by move family.
+// =====================================================
+const PETAL_PRESETS = [
+  { grad: "radial-gradient(ellipse at 50% 30%, #ffd7a8 0%, #ff8a7a 55%, #ff5f8a 100%)", rot: 0 },
+  { grad: "radial-gradient(ellipse at 50% 30%, #ffcfe0 0%, #ff8ac6 55%, #a94ce7 100%)", rot: 51.4 },
+  { grad: "radial-gradient(ellipse at 50% 30%, #fff3b5 0%, #ffc772 55%, #ff8a3d 100%)", rot: 102.8 },
+  { grad: "radial-gradient(ellipse at 50% 30%, #ffe3f0 0%, #f9a8d9 55%, #d35bb0 100%)", rot: 154.2 },
+  { grad: "radial-gradient(ellipse at 50% 30%, #d9f6e2 0%, #85d9b3 55%, #4ab09a 100%)", rot: 205.7 },
+  { grad: "radial-gradient(ellipse at 50% 30%, #d9ebff 0%, #9ac1ff 55%, #6a8bff 100%)", rot: 257.1 },
+  { grad: "radial-gradient(ellipse at 50% 30%, #f1dcff 0%, #c89aff 55%, #8a5df0 100%)", rot: 308.5 },
+];
+
+function renderMandala(session) {
+  const el = document.getElementById("mandala");
+  if (!el) return;
+  el.innerHTML = "";
+
+  session.moves.forEach((m, i) => {
+    if (m.status !== "completed" && m.status !== "partial") return;
+    const preset = PETAL_PRESETS[i];
+    const petal = document.createElement("div");
+    petal.className = "petal show" + (m.status === "partial" ? " partial" : "");
+    petal.style.background = preset.grad;
+    petal.style.setProperty("--rot", preset.rot + "deg");
+    petal.style.animationDelay = (0.15 + i * 0.14) + "s";
+    el.appendChild(petal);
+  });
+
+  const core = document.createElement("div");
+  core.className = "core";
+  el.appendChild(core);
+
+  // Deterministic sparkle positions so the mandala is reproducible per session
+  const sparkles = [
+    { x: -70, y: -40, delay: 1.3 },
+    { x:  60, y:  70, delay: 1.6 },
+    { x: -45, y:  80, delay: 1.9 },
+    { x:  75, y: -55, delay: 2.2 },
+  ];
+  sparkles.forEach(({ x, y, delay }) => {
+    const s = document.createElement("div");
+    s.className = "sparkle";
+    s.style.left = `calc(50% + ${x}px - 7px)`;
+    s.style.top  = `calc(50% + ${y}px - 7px)`;
+    s.style.animationDelay = delay + "s";
+    el.appendChild(s);
+  });
+}
+
+function reflectionFor(session, data) {
+  const c = session.moves.filter((m) => m.status === "completed").length;
+  const p = session.moves.filter((m) => m.status === "partial").length;
+  const anyDone = c + p > 0;
+  const streak = data.streak || 0;
+  const matchedSec = Math.round((State.observations?.matchedMs || 0) / 1000);
+
+  if (!anyDone) return "Rest is practice too. Come back tomorrow.";
+
+  if (c === 7) {
+    if (streak <= 1) return "Full seven, first time through. Save this feeling.";
+    if (streak >= 7) return `Seven moves, ${streak} days. The habit is here.`;
+    return "You stayed with every move today.";
+  }
+  if (c >= 4) {
+    return matchedSec > 5
+      ? "A steady session — your lips really found the shapes a few times."
+      : "A steady session. The ones that fit today, you kept.";
+  }
+  if (c >= 1) {
+    if (matchedSec > 3) return "Short, but a couple of moves really landed.";
+    return "You showed up. Shorter is still practice.";
+  }
+  return "Softer today. Tomorrow is a new one.";
 }
 
 // Signal readiness for diagnostics
