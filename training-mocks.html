@@ -1,0 +1,767 @@
+<title>Face Yoga — training session UI</title>
+
+<style>
+  :root {
+    --night: #0a0b10;
+    --deep: #060709;
+    --vellum: #f3eee6;
+    --mist: #a6a39a;
+    --soft: rgba(255,255,255,.08);
+    --soft-strong: rgba(255,255,255,.15);
+    --amber: #ead1b5;
+    --coral: #ff6a7d;
+    --pink: #ff8ac6;
+    --violet: #9668ff;
+    --teal: #5dcaa5;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 72px 32px 120px;
+    background:
+      radial-gradient(ellipse 1200px 800px at 12% -5%, rgba(255,138,170,.11), transparent 50%),
+      radial-gradient(ellipse 900px 700px at 95% 15%, rgba(150,100,255,.09), transparent 55%),
+      radial-gradient(ellipse 1000px 600px at 60% 100%, rgba(255,185,139,.08), transparent 60%),
+      var(--night);
+    color: var(--vellum);
+    font-family: -apple-system, "SF Pro Display", "Helvetica Neue", "PingFang SC", sans-serif;
+    font-weight: 300;
+    min-height: 100vh;
+  }
+
+  .page-head {
+    max-width: 1180px;
+    margin: 0 auto 72px;
+  }
+  .eyebrow {
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--mist);
+    font-weight: 500;
+    margin: 0 0 16px;
+  }
+  .page-head h1 {
+    font-size: clamp(44px, 5vw, 60px);
+    font-weight: 200;
+    letter-spacing: -0.025em;
+    line-height: 1.05;
+    margin: 0 0 20px;
+    text-wrap: balance;
+  }
+  .page-head h1 em {
+    font-family: "Instrument Serif", "Times New Roman", serif;
+    font-style: italic;
+    font-weight: 300;
+    color: var(--amber);
+  }
+  .page-head p {
+    font-size: 15px;
+    color: var(--mist);
+    max-width: 62ch;
+    line-height: 1.65;
+    margin: 0;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+    gap: 72px 36px;
+    max-width: 1180px;
+    margin: 0 auto;
+  }
+
+  .frame {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+  }
+  .phone {
+    width: 290px;
+    aspect-ratio: 375 / 812;
+    border-radius: 42px;
+    overflow: hidden;
+    background: #000;
+    position: relative;
+    box-shadow:
+      0 24px 60px -20px rgba(0,0,0,.65),
+      0 0 0 1px rgba(255,255,255,.07),
+      inset 0 0 0 1px rgba(255,255,255,.03);
+  }
+  .phone .status {
+    position: absolute;
+    top: 10px; left: 24px; right: 24px;
+    display: flex;
+    justify-content: space-between;
+    font-size: 10.5px;
+    color: var(--vellum);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    z-index: 12;
+    pointer-events: none;
+  }
+  .phone .notch {
+    position: absolute;
+    top: 9px; left: 50%;
+    transform: translateX(-50%);
+    width: 86px; height: 24px;
+    background: #000;
+    border-radius: 14px;
+    z-index: 11;
+  }
+  .phone svg { display: block; width: 100%; height: 100%; }
+
+  .caption {
+    text-align: center;
+    max-width: 260px;
+  }
+  .caption .num {
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--mist);
+    opacity: 0.6;
+    font-weight: 500;
+  }
+  .caption h3 {
+    font-size: 17px;
+    font-weight: 400;
+    letter-spacing: -0.01em;
+    margin: 6px 0 6px;
+    color: var(--vellum);
+    text-wrap: balance;
+  }
+  .caption p {
+    font-size: 12.5px;
+    color: var(--mist);
+    line-height: 1.55;
+    margin: 0;
+  }
+
+  .tokens {
+    max-width: 1180px;
+    margin: 128px auto 0;
+    padding-top: 56px;
+    border-top: 1px solid rgba(255,255,255,.08);
+  }
+  .tokens h2 {
+    font-size: 28px;
+    font-weight: 300;
+    letter-spacing: -0.02em;
+    margin: 0 0 8px;
+  }
+  .tokens > p {
+    color: var(--mist); font-size: 13px; margin: 0 0 36px;
+  }
+  .token-section {
+    margin-bottom: 48px;
+  }
+  .token-section h4 {
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--mist);
+    font-weight: 500;
+    margin: 0 0 16px;
+  }
+  .color-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 16px;
+  }
+  .swatch {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .swatch .chip {
+    width: 100%;
+    aspect-ratio: 1.5;
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,.06);
+  }
+  .swatch .meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .swatch .name {
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--mist);
+  }
+  .swatch .hex {
+    font-size: 11px;
+    font-family: "SF Mono", "JetBrains Mono", Menlo, monospace;
+    color: var(--vellum);
+    opacity: 0.75;
+  }
+  .type-list {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  .type-row {
+    display: grid;
+    grid-template-columns: 120px 1fr 1fr;
+    gap: 24px;
+    align-items: baseline;
+    padding: 20px 0;
+    border-top: 1px solid rgba(255,255,255,.06);
+  }
+  .type-row:first-child { border-top: 0; padding-top: 0; }
+  .type-row .label {
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--mist);
+  }
+  .type-row .sample { color: var(--vellum); }
+  .type-row .meta {
+    font-size: 11px;
+    font-family: "SF Mono", Menlo, monospace;
+    color: var(--mist);
+    opacity: 0.75;
+  }
+
+  @media (max-width: 640px) {
+    body { padding: 48px 20px 80px; }
+    .page-head h1 { font-size: 36px; }
+    .phone { width: 100%; max-width: 320px; }
+    .type-row { grid-template-columns: 1fr; gap: 8px; }
+  }
+</style>
+
+<div class="page-head">
+  <p class="eyebrow">Design review · training session</p>
+  <h1>A quiet ritual with <em>live feedback</em>, state by state.</h1>
+  <p>Nine mobile frames covering every state inside a practice session, from setup to the completion bloom. Each frame is drawn in SVG inside the phone — right-click any phone and "Copy SVG" to paste into Figma as editable vectors, or screenshot the whole frame. The phone chrome (notch, status, radius) is HTML and not included in the SVG itself, so only the UI exports. Palette, type and spacing tokens are at the bottom.</p>
+</div>
+
+<section class="grid" id="screens"></section>
+
+<section class="tokens">
+  <h2>Design tokens</h2>
+  <p>Values the whole flow is built from. Use these verbatim in Figma styles / variables.</p>
+
+  <div class="token-section">
+    <h4>Palette</h4>
+    <div class="color-grid">
+      <div class="swatch"><div class="chip" style="background:#0a0b10"></div><div class="meta"><span class="name">Night</span><span class="hex">#0A0B10</span></div></div>
+      <div class="swatch"><div class="chip" style="background:#060709"></div><div class="meta"><span class="name">Deep</span><span class="hex">#060709</span></div></div>
+      <div class="swatch"><div class="chip" style="background:#f3eee6"></div><div class="meta"><span class="name">Vellum</span><span class="hex">#F3EEE6</span></div></div>
+      <div class="swatch"><div class="chip" style="background:#a6a39a"></div><div class="meta"><span class="name">Mist</span><span class="hex">#A6A39A</span></div></div>
+      <div class="swatch"><div class="chip" style="background:#ead1b5"></div><div class="meta"><span class="name">Amber</span><span class="hex">#EAD1B5</span></div></div>
+      <div class="swatch"><div class="chip" style="background:linear-gradient(135deg,#ff6a7d,#ff8ac6)"></div><div class="meta"><span class="name">Coral→Pink</span><span class="hex">#FF6A7D / #FF8AC6</span></div></div>
+      <div class="swatch"><div class="chip" style="background:linear-gradient(135deg,#fff2d3,#ff7cb9 60%,#9668ff)"></div><div class="meta"><span class="name">Perfect petal</span><span class="hex">3-petal only</span></div></div>
+      <div class="swatch"><div class="chip" style="background:#5dcaa5"></div><div class="meta"><span class="name">Teal</span><span class="hex">#5DCAA5</span></div></div>
+    </div>
+  </div>
+
+  <div class="token-section">
+    <h4>Typography</h4>
+    <div class="type-list">
+      <div class="type-row">
+        <span class="label">Display</span>
+        <span class="sample" style="font-size:40px; font-weight:200; letter-spacing:-0.025em;">Opening gently</span>
+        <span class="meta">SF Pro Display · 200 · -2.5%</span>
+      </div>
+      <div class="type-row">
+        <span class="label">Title</span>
+        <span class="sample" style="font-size:22px; font-weight:300; letter-spacing:-0.015em;">Pucker side to side</span>
+        <span class="meta">SF Pro Display · 300 · -1.5%</span>
+      </div>
+      <div class="type-row">
+        <span class="label">Body</span>
+        <span class="sample" style="font-size:15px; font-weight:400;">Gently pucker your lips, keep your head still.</span>
+        <span class="meta">SF Pro · 400 · body line-height 1.5</span>
+      </div>
+      <div class="type-row">
+        <span class="label">Pill / label</span>
+        <span class="sample" style="font-size:11px; font-weight:500; letter-spacing:0.18em; text-transform:uppercase;">Match</span>
+        <span class="meta">SF Pro · 500 · 18% tracking · uppercase</span>
+      </div>
+      <div class="type-row">
+        <span class="label">Serif accent</span>
+        <span class="sample" style="font-family:'Instrument Serif','Times New Roman',serif; font-style:italic; font-size:22px; color:var(--amber);">beautiful</span>
+        <span class="meta">Instrument Serif · italic · amber · 1 moment per screen</span>
+      </div>
+      <div class="type-row">
+        <span class="label">Numeric</span>
+        <span class="sample" style="font-size:40px; font-weight:200; font-variant-numeric:tabular-nums; letter-spacing:-0.02em;">3</span>
+        <span class="meta">SF Pro Display · 200 · tabular</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="token-section">
+    <h4>Spacing &amp; radius</h4>
+    <div class="color-grid">
+      <div class="swatch"><div class="chip" style="background:rgba(255,255,255,.05); border-radius:28px"></div><div class="meta"><span class="name">Card</span><span class="hex">28px</span></div></div>
+      <div class="swatch"><div class="chip" style="background:rgba(255,255,255,.05); border-radius:20px"></div><div class="meta"><span class="name">Pill-small</span><span class="hex">20px</span></div></div>
+      <div class="swatch"><div class="chip" style="background:rgba(255,255,255,.05); border-radius:999px; aspect-ratio:3/1"></div><div class="meta"><span class="name">Pill</span><span class="hex">999px</span></div></div>
+      <div class="swatch"><div class="chip" style="background:rgba(255,255,255,.05); border-radius:50%; aspect-ratio:1/1"></div><div class="meta"><span class="name">Icon btn</span><span class="hex">36×36</span></div></div>
+    </div>
+  </div>
+</section>
+
+<script>
+// ======================================================================
+// All nine training-session screens. Each is a pure SVG you can right-click
+// → "Copy SVG" and paste into Figma as editable vectors.
+// Shared landmark positions are precomputed so the mesh / stickers / targets
+// all line up to the same implied face.
+// ======================================================================
+
+// Face mesh landmark positions mapped into the phone's 375 × 812 viewBox
+// (face centered around y=350, implied by the dots alone)
+const L = {
+  // forehead
+  10:  [187, 230], 103: [144, 240], 332: [230, 240],
+  70:  [137, 272], 300: [237, 272],
+  // brows + stickers at 55 / 285 / 70 / 300
+  55:  [172, 272], 285: [202, 272],
+  // eye corners
+  33:  [141, 310], 263: [233, 310],
+  133: [172, 310], 362: [202, 310],
+  // nose + lips
+  1:   [187, 355],
+  61:  [167, 410], 291: [207, 410],
+  13:  [187, 400], 14:  [187, 420],
+  // cheeks
+  234: [114, 360], 454: [260, 360],
+  // chin
+  148: [167, 468], 377: [207, 468], 152: [187, 490],
+};
+
+const MESH_CONN = [
+  [10,103],[10,332],[103,332],[103,70],[332,300],
+  [70,55],[55,285],[285,300],
+  [70,33],[300,263],[55,133],[285,362],
+  [33,1],[263,1],[133,1],[362,1],
+  [1,234],[1,454],[234,33],[454,263],
+  [234,61],[454,291],[1,61],[1,291],
+  [61,148],[291,377],[148,377],[148,152],[377,152],
+];
+
+const MESH_DOTS = [10,103,332,133,362,33,263,1,61,291,152];      // sticker anchors omitted
+const STICKER_ANCHORS = { brow:[55,285], temple:[70,300], cheek:[234,454], nose:[1], chin:[148,377] };
+
+function dot(idx, r=2.4, fill="#fff", opacity=0.85){
+  const [x,y] = L[idx]; return `<circle cx="${x}" cy="${y}" r="${r}" fill="${fill}" opacity="${opacity}"/>`;
+}
+function line(a,b, w=0.6){
+  const [x1,y1]=L[a],[x2,y2]=L[b]; return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="rgba(255,255,255,.5)" stroke-width="${w}" stroke-linecap="round"/>`;
+}
+function mesh(opts={}){
+  const dim = opts.dim || 1;
+  return `
+    <g opacity="${dim}">
+      ${MESH_CONN.map(([a,b])=>line(a,b)).join("")}
+      ${MESH_DOTS.map(i=>dot(i, 2.4)).join("")}
+    </g>`;
+}
+function stickers({brow=true,temple=true,cheek=true,nose=true,chin=true}={}){
+  const s = [];
+  if (brow)   STICKER_ANCHORS.brow.forEach(i=>s.push(sticker(i, "brow",   10, "url(#g-brow)")));
+  if (temple) STICKER_ANCHORS.temple.forEach(i=>s.push(sticker(i, "tmp",   6,  "url(#g-temple)")));
+  if (cheek)  STICKER_ANCHORS.cheek.forEach(i=>s.push(sticker(i, "cheek", 10, "url(#g-cheek)")));
+  if (nose)   STICKER_ANCHORS.nose.forEach(i=>s.push(sticker(i, "nose",   6,  "url(#g-nose)")));
+  if (chin)   STICKER_ANCHORS.chin.forEach(i=>s.push(sticker(i, "chin",   8,  "url(#g-chin)")));
+  return s.join("");
+}
+function sticker(idx, name, r, fill){
+  const [x,y]=L[idx];
+  if (name === "brow") return `<rect x="${x-r}" y="${y-r}" width="${r*2}" height="${r*2}" rx="4" fill="${fill}"/>`;
+  if (name === "cheek") return starPath(x,y,r,fill);
+  if (name === "chin") return `<path d="${cloverPath(x,y,r)}" fill="${fill}"/>`;
+  if (name === "nose") return `<path d="${bowtiePath(x,y,r)}" fill="${fill}"/>`;
+  return `<circle cx="${x}" cy="${y}" r="${r}" fill="${fill}"/>`;
+}
+function starPath(cx,cy,r,fill){
+  // 5-point burst (orange)
+  const points = [];
+  for (let i=0;i<10;i++){
+    const a = (i*36 - 90) * Math.PI/180;
+    const rr = i % 2 === 0 ? r : r*0.5;
+    points.push(`${cx+Math.cos(a)*rr},${cy+Math.sin(a)*rr}`);
+  }
+  return `<polygon points="${points.join(" ")}" fill="${fill}"/>`;
+}
+function cloverPath(cx,cy,r){
+  // 4-petal clover-ish via arcs around center
+  const d = [];
+  for (let i=0;i<4;i++){
+    const a = i*Math.PI/2;
+    const px = cx + Math.cos(a)*r*0.7;
+    const py = cy + Math.sin(a)*r*0.7;
+    d.push(`M${cx},${cy} Q${px+Math.cos(a-Math.PI/4)*r*0.9},${py+Math.sin(a-Math.PI/4)*r*0.9} ${px},${py} Q${px+Math.cos(a+Math.PI/4)*r*0.9},${py+Math.sin(a+Math.PI/4)*r*0.9} ${cx},${cy}`);
+  }
+  return d.join(" ");
+}
+function bowtiePath(cx,cy,r){
+  // small 4-point rounded-cross
+  return `M${cx},${cy-r} Q${cx+r*0.4},${cy} ${cx+r},${cy} Q${cx+r*0.4},${cy} ${cx},${cy+r} Q${cx-r*0.4},${cy} ${cx-r},${cy} Q${cx-r*0.4},${cy} ${cx},${cy-r} Z`;
+}
+
+// Reusable SVG defs (gradients, blur) injected into every screen
+const DEFS = `
+  <defs>
+    <radialGradient id="aurora-pink"><stop offset="0%" stop-color="#ff8da1" stop-opacity="0.55"/><stop offset="55%" stop-color="#ff5a3c" stop-opacity="0.18"/><stop offset="100%" stop-color="#000" stop-opacity="0"/></radialGradient>
+    <radialGradient id="aurora-violet"><stop offset="0%" stop-color="#7a8bff" stop-opacity="0.45"/><stop offset="100%" stop-color="#000" stop-opacity="0"/></radialGradient>
+    <radialGradient id="aurora-honey"><stop offset="0%" stop-color="#ffb98b" stop-opacity="0.4"/><stop offset="100%" stop-color="#000" stop-opacity="0"/></radialGradient>
+    <radialGradient id="face-glow"><stop offset="0%" stop-color="#1e212b" stop-opacity="1"/><stop offset="60%" stop-color="#111218" stop-opacity="0.8"/><stop offset="100%" stop-color="#000" stop-opacity="0"/></radialGradient>
+    <radialGradient id="target-warm"><stop offset="0%" stop-color="#ffd1a0" stop-opacity="0.75"/><stop offset="100%" stop-color="#ffd1a0" stop-opacity="0"/></radialGradient>
+    <radialGradient id="target-perfect"><stop offset="0%" stop-color="#fff2d3" stop-opacity="0.9"/><stop offset="40%" stop-color="#ff7cb9" stop-opacity="0.5"/><stop offset="100%" stop-color="#9668ff" stop-opacity="0"/></radialGradient>
+    <radialGradient id="g-brow"  cx="35%" cy="35%"><stop offset="0%" stop-color="#64c61e"/><stop offset="60%" stop-color="#139b4e"/><stop offset="100%" stop-color="#082010"/></radialGradient>
+    <radialGradient id="g-temple" cx="30%" cy="30%"><stop offset="0%" stop-color="#cbe11a"/><stop offset="55%" stop-color="#718e4b"/><stop offset="100%" stop-color="#4c35b9"/></radialGradient>
+    <radialGradient id="g-cheek" cx="40%" cy="35%"><stop offset="0%" stop-color="#fec167"/><stop offset="55%" stop-color="#dc6307"/><stop offset="100%" stop-color="#3674a4"/></radialGradient>
+    <radialGradient id="g-nose"  cx="50%" cy="50%"><stop offset="0%" stop-color="#c1ff70"/><stop offset="55%" stop-color="#7d67f9"/><stop offset="100%" stop-color="#06071a"/></radialGradient>
+    <radialGradient id="g-chin"  cx="35%" cy="35%"><stop offset="0%" stop-color="#51c3e2"/><stop offset="55%" stop-color="#e36bd9"/><stop offset="100%" stop-color="#1e5a59"/></radialGradient>
+    <radialGradient id="bloom" cx="50%" cy="50%"><stop offset="0%" stop-color="#fff2d3" stop-opacity="0.5"/><stop offset="35%" stop-color="#ff7cb9" stop-opacity="0.3"/><stop offset="70%" stop-color="#9668ff" stop-opacity="0.15"/><stop offset="100%" stop-color="#000" stop-opacity="0"/></radialGradient>
+    <filter id="blur-sm" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="12"/></filter>
+    <filter id="blur-md" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="24"/></filter>
+    <filter id="blur-lg" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="36"/></filter>
+  </defs>`;
+
+// Shared ambient background for every exercise screen
+const AMBIENT = `
+  <rect width="375" height="812" fill="#06070a"/>
+  <circle cx="80" cy="140" r="180" fill="url(#aurora-pink)" filter="url(#blur-md)"/>
+  <circle cx="310" cy="560" r="160" fill="url(#aurora-violet)" filter="url(#blur-md)"/>
+  <circle cx="187" cy="340" r="160" fill="url(#face-glow)" filter="url(#blur-sm)"/>`;
+
+// Topbar block
+function topbar(moveIdx, totalProgress=0){
+  return `
+    <g>
+      <circle cx="34" cy="60" r="18" fill="rgba(255,255,255,.08)" stroke="rgba(255,255,255,.1)"/>
+      <path d="M28,56 L28,64 M28,56 L28,64 M30,58 L30,62 M26,58 L26,62" stroke="#f3eee6" stroke-width="1.6" stroke-linecap="round"/>
+      <text x="187" y="54" text-anchor="middle" fill="#a6a39a" font-size="10" font-weight="500" letter-spacing="2">${moveIdx} / 7</text>
+      <rect x="112" y="60" width="150" height="2.5" rx="1.25" fill="rgba(255,255,255,.12)"/>
+      <rect x="112" y="60" width="${150*totalProgress}" height="2.5" rx="1.25" fill="url(#progress-fill)"/>
+      <circle cx="341" cy="60" r="18" fill="rgba(255,255,255,.08)" stroke="rgba(255,255,255,.1)"/>
+      <path d="M335,54 L347,66 M347,54 L335,66" stroke="#f3eee6" stroke-width="1.6" stroke-linecap="round"/>
+    </g>`;
+}
+const PROGRESS_FILL = `<linearGradient id="progress-fill" x1="0" x2="1"><stop offset="0" stop-color="#ffb48c"/><stop offset="1" stop-color="#ff6a7d"/></linearGradient>`;
+
+// Reusable rep dots (petal-rated)
+function repDots(cx, y, count, states){
+  // states: array like ["p2","p3","on","",""], where "on"=current, ""=upcoming, "p0..p3"=done quality
+  const gap = 14, total = count * gap - gap;
+  const startX = cx - total/2;
+  return states.slice(0, count).map((s, i) => {
+    const x = startX + i * gap;
+    if (s === "on")   return `<circle cx="${x}" cy="${y}" r="4" fill="#ead1b5"/><circle cx="${x}" cy="${y}" r="7" fill="none" stroke="#ead1b5" opacity="0.35"/>`;
+    if (s === "p0")   return `<circle cx="${x}" cy="${y}" r="3.5" fill="rgba(255,255,255,.3)"/>`;
+    if (s === "p1")   return `<circle cx="${x}" cy="${y}" r="4" fill="url(#dot-p1)"/>`;
+    if (s === "p2")   return `<circle cx="${x}" cy="${y}" r="4.5" fill="url(#dot-p2)"/>`;
+    if (s === "p3")   return `<g><circle cx="${x}" cy="${y}" r="7" fill="url(#dot-p3-halo)" opacity="0.9"/><circle cx="${x}" cy="${y}" r="5" fill="url(#dot-p3)"/></g>`;
+    return `<circle cx="${x}" cy="${y}" r="3.5" fill="rgba(255,255,255,.2)"/>`;
+  }).join("");
+}
+const DOT_GRADS = `
+  <linearGradient id="dot-p1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffdfae"/><stop offset="1" stop-color="#ffb27a"/></linearGradient>
+  <linearGradient id="dot-p2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffcf8a"/><stop offset="1" stop-color="#ff8a9a"/></linearGradient>
+  <linearGradient id="dot-p3" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff2d3"/><stop offset="0.6" stop-color="#ff7cb9"/><stop offset="1" stop-color="#9668ff"/></linearGradient>
+  <radialGradient id="dot-p3-halo"><stop offset="0" stop-color="#ff7cb9" stop-opacity="0.5"/><stop offset="1" stop-color="#9668ff" stop-opacity="0"/></radialGradient>`;
+
+// Cue card (bottom glass pill)
+function cueCard({pill, title, sub, dots=null, serifSub=false, y=620, pillColor="rgba(255,255,255,.1)", pillText="#a6a39a"}){
+  const w = 275, x = (375 - w)/2;
+  const h = dots ? 148 : 118;
+  return `
+    <g>
+      <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="22" fill="rgba(10,12,20,.72)" stroke="rgba(255,255,255,.08)"/>
+      ${pill ? `
+        <rect x="${187 - 38}" y="${y + 16}" width="76" height="22" rx="11" fill="${pillColor}"/>
+        <text x="187" y="${y+31}" text-anchor="middle" fill="${pillText}" font-size="10" font-weight="500" letter-spacing="2" text-transform="uppercase">${pill}</text>
+      `:""}
+      <text x="187" y="${y + (pill?62:48)}" text-anchor="middle" fill="#f3eee6" font-size="18" font-weight="300" letter-spacing="-0.3">${title}</text>
+      ${sub ? `
+        <text x="187" y="${y + (pill?84:72)}" text-anchor="middle" fill="${serifSub ? '#ead1b5' : '#a6a39a'}"
+          font-size="${serifSub ? '15' : '12'}"
+          font-family="${serifSub ? 'Instrument Serif, Times New Roman, serif' : 'inherit'}"
+          font-style="${serifSub ? 'italic' : 'normal'}"
+          font-weight="${serifSub ? '400' : '400'}">${sub}</text>
+      ` : ""}
+      ${dots ? `<g transform="translate(0, ${y+120})">${dots}</g>` : ""}
+    </g>`;
+}
+
+// Footer with controls (replay demo / skip / sound)
+function footerBtns({sound=false}={}){
+  return `
+    <g>
+      <rect x="20" y="748" width="118" height="40" rx="20" fill="rgba(255,255,255,.08)" stroke="rgba(255,255,255,.1)"/>
+      <text x="79" y="773" text-anchor="middle" fill="#f3eee6" font-size="12" font-weight="400">Replay demo</text>
+
+      <rect x="146" y="748" width="78" height="40" rx="20" fill="rgba(255,255,255,.08)" stroke="rgba(255,255,255,.1)"/>
+      <text x="185" y="773" text-anchor="middle" fill="#f3eee6" font-size="12" font-weight="400">Skip</text>
+
+      <circle cx="252" cy="768" r="20" fill="${sound ? '#ead1b5' : 'rgba(255,255,255,.08)'}" stroke="rgba(255,255,255,.1)"/>
+      <text x="252" y="773" text-anchor="middle" fill="${sound ? '#1a1a1a' : '#f3eee6'}" font-size="14" font-weight="500">♪</text>
+
+      <!-- Home indicator -->
+      <rect x="130" y="797" width="115" height="4" rx="2" fill="rgba(255,255,255,.3)"/>
+    </g>`;
+}
+
+// ========= SCREEN BUILDERS =========
+
+function screen1Setup(){
+  return `
+    <svg viewBox="0 0 375 812" xmlns="http://www.w3.org/2000/svg">
+      ${DEFS}
+      ${AMBIENT}
+      <!-- face oval guide -->
+      <ellipse cx="187" cy="400" rx="130" ry="190" fill="none" stroke="rgba(130,255,180,.7)" stroke-width="1.5" stroke-dasharray="6 6"/>
+      <!-- partial mesh appearing -->
+      ${mesh({dim:0.4})}
+      <!-- topbar with back + brand -->
+      <g>
+        <circle cx="34" cy="60" r="18" fill="rgba(255,255,255,.08)"/>
+        <path d="M38 54 L30 60 L38 66" stroke="#f3eee6" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+        <text x="187" y="63" text-anchor="middle" fill="#a6a39a" font-size="10" font-weight="500" letter-spacing="2.5">GETTING READY</text>
+      </g>
+      <!-- status pill -->
+      <g>
+        <rect x="100" y="620" width="175" height="40" rx="20" fill="rgba(10,12,20,.78)" stroke="rgba(255,255,255,.1)"/>
+        <text x="187" y="645" text-anchor="middle" fill="#f3eee6" font-size="13" font-weight="400">Looking for your face…</text>
+      </g>
+      <!-- Switch to no-camera link -->
+      <text x="187" y="760" text-anchor="middle" fill="#a6a39a" font-size="12" font-weight="400" text-decoration="underline">Continue without camera</text>
+      <rect x="130" y="797" width="115" height="4" rx="2" fill="rgba(255,255,255,.3)"/>
+    </svg>`;
+}
+
+function screen2Calibration(){
+  return `
+    <svg viewBox="0 0 375 812" xmlns="http://www.w3.org/2000/svg">
+      ${DEFS}
+      ${AMBIENT}
+      <!-- breath ring: concentric soft circles -->
+      <circle cx="187" cy="380" r="130" fill="url(#aurora-pink)" filter="url(#blur-sm)" opacity="0.9"/>
+      <circle cx="187" cy="380" r="105" fill="none" stroke="rgba(255,255,255,.15)" stroke-width="1"/>
+      <circle cx="187" cy="380" r="85"  fill="none" stroke="rgba(255,255,255,.2)" stroke-width="1"/>
+      <circle cx="187" cy="380" r="65"  fill="none" stroke="rgba(255,255,255,.3)" stroke-width="1"/>
+      <!-- topbar -->
+      <g>
+        <circle cx="34" cy="60" r="18" fill="rgba(255,255,255,.08)"/>
+        <path d="M32 54 L28 60 L32 66 M28 60 L40 60" stroke="#f3eee6" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+        <text x="187" y="63" text-anchor="middle" fill="#a6a39a" font-size="10" font-weight="500" letter-spacing="2.5">CALIBRATING</text>
+        <circle cx="341" cy="60" r="18" fill="rgba(255,255,255,.08)"/>
+        <text x="341" y="65" text-anchor="middle" fill="#f3eee6" font-size="13" font-weight="500">↷</text>
+      </g>
+      <!-- step indicator + cue text -->
+      <g>
+        <text x="187" y="565" text-anchor="middle" fill="#a6a39a" font-size="10" font-weight="500" letter-spacing="2.5">1 / 4</text>
+        <text x="187" y="605" text-anchor="middle" fill="#f3eee6" font-size="22" font-weight="300" letter-spacing="-0.3">Keep a relaxed face</text>
+        <text x="187" y="632" text-anchor="middle" fill="#a6a39a" font-size="13" font-weight="400">2 seconds · neutral</text>
+      </g>
+      <!-- Privacy footnote -->
+      <text x="187" y="760" text-anchor="middle" fill="#a6a39a" font-size="10" opacity="0.6">Calibration stays on your phone.</text>
+      <rect x="130" y="797" width="115" height="4" rx="2" fill="rgba(255,255,255,.3)"/>
+    </svg>`;
+}
+
+function screen3Demo(){
+  return `
+    <svg viewBox="0 0 375 812" xmlns="http://www.w3.org/2000/svg">
+      ${DEFS}${PROGRESS_FILL}${DOT_GRADS}
+      ${AMBIENT}
+      ${mesh({dim:0.75})}
+      ${stickers()}
+      ${topbar(1, 0.0)}
+      ${cueCard({
+        pill: "DEMO",
+        title: "Pucker side to side",
+        sub: "Gently pucker your lips, keep your head still.",
+        dots: repDots(187, 0, 4, ["","","",""]),
+        y: 580
+      })}
+      ${footerBtns()}
+    </svg>`;
+}
+
+function screen4Ready(){
+  return `
+    <svg viewBox="0 0 375 812" xmlns="http://www.w3.org/2000/svg">
+      ${DEFS}${PROGRESS_FILL}${DOT_GRADS}
+      ${AMBIENT}
+      ${mesh({dim:0.4})}
+      ${stickers()}
+      ${topbar(1, 0.02)}
+      <!-- Big 3 countdown -->
+      <text x="187" y="520" text-anchor="middle" fill="#f3eee6" font-size="140" font-weight="200" letter-spacing="-6">3</text>
+      <!-- Ready pill above -->
+      <g>
+        <rect x="149" y="420" width="76" height="22" rx="11" fill="rgba(255,255,255,.12)"/>
+        <text x="187" y="435" text-anchor="middle" fill="#a6a39a" font-size="10" font-weight="500" letter-spacing="2">READY</text>
+      </g>
+      <text x="187" y="570" text-anchor="middle" fill="#a6a39a" font-size="13" font-weight="400">Pucker gently. Head still.</text>
+      ${footerBtns()}
+    </svg>`;
+}
+
+function screen5APrecisionMatch(){
+  return `
+    <svg viewBox="0 0 375 812" xmlns="http://www.w3.org/2000/svg">
+      ${DEFS}${PROGRESS_FILL}${DOT_GRADS}
+      ${AMBIENT}
+      ${mesh({dim:0.85})}
+      ${stickers()}
+      <!-- Target ellipse over mouth, solid warm (matching) -->
+      <ellipse cx="187" cy="415" rx="38" ry="55" fill="url(#target-warm)" opacity="0.6"/>
+      <ellipse cx="187" cy="415" rx="38" ry="55" fill="none" stroke="#ffd1a0" stroke-width="2.5" opacity="0.95"/>
+      ${topbar(3, 0.32)}
+      ${cueCard({
+        pill: "MATCH",
+        title: "A — open gently",
+        sub: "beautiful",
+        serifSub: true,
+        dots: repDots(187, 0, 4, ["p2","p3","on",""]),
+        y: 580
+      })}
+      ${footerBtns({sound:true})}
+    </svg>`;
+}
+
+function screen6SnapMoment(){
+  return `
+    <svg viewBox="0 0 375 812" xmlns="http://www.w3.org/2000/svg">
+      ${DEFS}${PROGRESS_FILL}${DOT_GRADS}
+      ${AMBIENT}
+      <!-- bright pulse flare at mouth -->
+      <circle cx="187" cy="415" r="120" fill="url(#target-perfect)" filter="url(#blur-sm)" opacity="0.9"/>
+      ${mesh({dim:0.95})}
+      ${stickers()}
+      <!-- Target ellipse at peak glow -->
+      <ellipse cx="187" cy="415" rx="42" ry="60" fill="url(#target-warm)" opacity="0.85"/>
+      <ellipse cx="187" cy="415" rx="42" ry="60" fill="none" stroke="#fff2d3" stroke-width="3"/>
+      ${topbar(3, 0.40)}
+      ${cueCard({
+        pill: "+1",
+        title: "Nice.",
+        sub: "that was lovely",
+        serifSub: true,
+        dots: repDots(187, 0, 4, ["p2","p3","p3",""]),
+        y: 580,
+        pillColor: "rgba(234,209,181,.9)",
+        pillText: "#1a1a1a"
+      })}
+      ${footerBtns({sound:true})}
+    </svg>`;
+}
+
+function screen7PuckerCircles(){
+  return `
+    <svg viewBox="0 0 375 812" xmlns="http://www.w3.org/2000/svg">
+      ${DEFS}${PROGRESS_FILL}${DOT_GRADS}
+      ${AMBIENT}
+      ${mesh({dim:0.85})}
+      ${stickers()}
+      <!-- Dashed circular guide around mouth -->
+      <circle cx="187" cy="415" r="46" fill="none" stroke="rgba(255,255,255,.3)" stroke-width="1.3" stroke-dasharray="5 5"/>
+      <!-- Target marker at top (up phase, solid warm) -->
+      <circle cx="187" cy="369" r="12" fill="url(#target-warm)" opacity="0.75"/>
+      <circle cx="187" cy="369" r="12" fill="none" stroke="#ffd1a0" stroke-width="2.4"/>
+      <!-- Current puckered-lip indicator (bright pulsing dot) -->
+      <circle cx="195" cy="375" r="4" fill="#fff" opacity="0.9"/>
+      <circle cx="195" cy="375" r="7" fill="none" stroke="#fff" opacity="0.4"/>
+      ${topbar(2, 0.18)}
+      ${cueCard({
+        pill: "MATCH",
+        title: "Slowly upward",
+        sub: "almost",
+        serifSub: true,
+        dots: repDots(187, 0, 4, ["p1","on","",""]),
+        y: 580
+      })}
+      ${footerBtns({sound:true})}
+    </svg>`;
+}
+
+function screen8GuidedSelfCheck(){
+  return `
+    <svg viewBox="0 0 375 812" xmlns="http://www.w3.org/2000/svg">
+      ${DEFS}${PROGRESS_FILL}${DOT_GRADS}
+      ${AMBIENT}
+      ${mesh({dim:0.3})}
+      ${stickers()}
+      ${topbar(5, 0.60)}
+      <!-- Centered modal -->
+      <g>
+        <rect x="48" y="300" width="279" height="220" rx="28" fill="rgba(10,12,20,.9)" stroke="rgba(255,255,255,.15)"/>
+        <text x="187" y="358" text-anchor="middle" fill="#f3eee6" font-size="20" font-weight="300" letter-spacing="-0.3">Did you follow along?</text>
+
+        <!-- Primary -->
+        <rect x="68" y="382" width="239" height="40" rx="20" fill="#f3eee6"/>
+        <text x="187" y="407" text-anchor="middle" fill="#1a1a1a" font-size="14" font-weight="500">Completed</text>
+
+        <!-- Ghosts -->
+        <rect x="68" y="430" width="239" height="40" rx="20" fill="rgba(255,255,255,.07)" stroke="rgba(255,255,255,.12)"/>
+        <text x="187" y="455" text-anchor="middle" fill="#f3eee6" font-size="14" font-weight="400">Try again</text>
+
+        <rect x="68" y="478" width="239" height="40" rx="20" fill="rgba(255,255,255,.07)" stroke="rgba(255,255,255,.12)"/>
+        <text x="187" y="503" text-anchor="middle" fill="#f3eee6" font-size="14" font-weight="400">Skip</text>
+      </g>
+      ${footerBtns({sound:true})}
+    </svg>`;
+}
+
+function screen9Completion(){
+  return `
+    <svg viewBox="0 0 375 812" xmlns="http://www.w3.org/2000/svg">
+      ${DEFS}${PROGRESS_FILL}${DOT_GRADS}
+      <rect width="375" height="812" fill="#06070a"/>
+      <!-- Full bloom from center -->
+      <circle cx="187" cy="406" r="280" fill="url(#bloom)" filter="url(#blur-lg)"/>
+      <circle cx="187" cy="406" r="180" fill="url(#bloom)" filter="url(#blur-md)" opacity="0.9"/>
+      <!-- Big checkmark -->
+      <text x="187" y="440" text-anchor="middle" fill="#fff5e0" font-size="130" font-weight="200" letter-spacing="-4">✓</text>
+      <!-- Reflection line in serif accent -->
+      <text x="187" y="520" text-anchor="middle" fill="#ead1b5" font-size="22" font-family="Instrument Serif, Times New Roman, serif" font-style="italic" font-weight="400">stunning.</text>
+      <!-- Soft subtitle -->
+      <text x="187" y="548" text-anchor="middle" fill="#a6a39a" font-size="12" font-weight="400">Next move in a moment…</text>
+      <rect x="130" y="797" width="115" height="4" rx="2" fill="rgba(255,255,255,.3)"/>
+    </svg>`;
+}
+
+// ========= RENDER =========
+
+const SCREENS = [
+  { n: "01 · setup",    t: "Looking for your face",   d: "Dashed face oval, mesh beginning to form, 2-second stability window.", svg: screen1Setup() },
+  { n: "02 · calibration", t: "Breath ring",           d: "Soft pulsing bloom, 4-step indicator, warm cue copy.",                svg: screen2Calibration() },
+  { n: "03 · demo",      t: "Move introduced",         d: "Face map and all 5 stickers; replay demo button available.",         svg: screen3Demo() },
+  { n: "04 · ready",      t: "3 · 2 · 1",              d: "Oversized countdown number, soft mesh ghosted behind.",              svg: screen4Ready() },
+  { n: "05 · match",      t: "A — precision peak",     d: "Target solid-filled; cue sub shifts to italic serif 'beautiful'.",   svg: screen5APrecisionMatch() },
+  { n: "06 · snap",       t: "Rep locked in",          d: "+1 pill goes amber; p3 rep dot lights with magenta-violet halo.",    svg: screen6SnapMoment() },
+  { n: "07 · circles",    t: "Pucker circles — up",    d: "Dashed track around lips, warm target at the current quadrant.",     svg: screen7PuckerCircles() },
+  { n: "08 · self-check", t: "Did you follow along?",  d: "Centered modal, only for moves the camera cannot verify.",           svg: screen8GuidedSelfCheck() },
+  { n: "09 · completion", t: "Move bloom",             d: "Full-screen soft bloom + italic reflection, 1.8s before auto-advance.", svg: screen9Completion() },
+];
+
+const grid = document.getElementById("screens");
+grid.innerHTML = SCREENS.map(s => `
+  <div class="frame">
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="status">
+        <span>9:41</span>
+        <span>5G ·</span>
+      </div>
+      ${s.svg}
+    </div>
+    <div class="caption">
+      <div class="num">${s.n}</div>
+      <h3>${s.t}</h3>
+      <p>${s.d}</p>
+    </div>
+  </div>
+`).join("");
+</script>
