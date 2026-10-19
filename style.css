@@ -450,30 +450,72 @@ ul, ol { list-style: none; }
 .exercise-body { z-index: 4 !important; }
 .topbar-exercise { z-index: 5 !important; }
 
-/* Camera-mode layout: push UI to the bottom so the face stays unblocked */
+/* Camera-mode layout: face is the UI. Everything else gets out of the way. */
 .screen-exercise.in-camera-mode .exercise-body {
   justify-content: flex-end;
-  padding-bottom: 20px;
-  gap: 14px;
+  padding-bottom: 10px;
+  gap: 10px;
 }
-.screen-exercise.in-camera-mode .phase-stage {
-  width: 180px;
-  height: 180px;
+/* No central glow — the face mesh + target overlay IS the visual. */
+.screen-exercise.in-camera-mode .phase-stage,
+.screen-exercise.in-camera-mode .phase-track {
+  display: none;
 }
-.screen-exercise.in-camera-mode .phase-glow {
-  width: 110px;
-  height: 110px;
-  opacity: .85;
+/* Minimal cue card at the bottom only */
+.screen-exercise.in-camera-mode .phase-copy {
+  background: rgba(10,12,18,.6);
+  padding: 12px 20px;
+  border-radius: 20px;
+  border: 1px solid rgba(255,255,255,.1);
+  max-width: 320px;
+  margin: 0 auto;
+  gap: 6px;
 }
-.screen-exercise.in-camera-mode .phase-letter {
-  font-size: 54px;
+.screen-exercise.in-camera-mode .phase-copy .pill { background: rgba(255,255,255,.1); }
+.screen-exercise.in-camera-mode .phase-cue {
+  font-size: 20px;
+  letter-spacing: .005em;
 }
-.screen-exercise.in-camera-mode .phase-ring { display: none; }
-.screen-exercise.in-camera-mode .phase-copy { padding: 0 24px; }
-.screen-exercise.in-camera-mode .phase-cue { font-size: 22px; }
+.screen-exercise.in-camera-mode .phase-sub { font-size: 12px; }
+/* Only a very subtle darken at the very bottom for the controls */
 .screen-exercise.in-camera-mode .exercise-dim {
-  background:
-    linear-gradient(180deg, rgba(0,0,0,.15) 0%, transparent 15%, transparent 60%, rgba(0,0,0,.75) 95%);
+  background: linear-gradient(180deg, transparent 0%, transparent 75%, rgba(0,0,0,.55) 98%);
+}
+.screen-exercise.in-camera-mode #exerciseVideo {
+  filter: brightness(1.08) contrast(1.03) saturate(1.08);
+}
+
+/* Completion flash — brief glow around the whole screen when a move completes */
+.completion-flash {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 15;
+  background: radial-gradient(circle at 50% 50%,
+    rgba(255,210,170,.25) 0%,
+    rgba(255,150,130,.15) 40%,
+    transparent 70%);
+  opacity: 0;
+  animation: completionFlash 1.4s ease-out both;
+}
+.completion-flash .mark {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 72px;
+  color: rgba(255,235,210,.95);
+  text-shadow: 0 0 40px rgba(255,180,140,.9);
+  animation: markPop .9s cubic-bezier(.3,0,.2,1) both;
+}
+@keyframes completionFlash {
+  0%   { opacity: 0; }
+  25%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+@keyframes markPop {
+  0%   { opacity: 0; transform: translate(-50%, -50%) scale(.3); }
+  40%  { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
 }
 
 .sticker-layer {

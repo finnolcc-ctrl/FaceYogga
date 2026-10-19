@@ -117,6 +117,7 @@ const State = {
   blendshapes: {},                                    // EMA-smoothed category -> score
   observations: null,                                 // { matchedMs, smileWarmth, samples }
   phaseGate: null,                                    // active detection-gated phase state
+  lastLandmarks: null,                                // most recent faceLandmarks for detection logic
   paused: false,
   wakeLock: null,
 };
@@ -288,6 +289,7 @@ function runSetupLoop(videoEl, statusEl, ovalEl) {
       lastVidTime = videoEl.currentTime;
       try {
         const res = State.landmarker.detectForVideo(videoEl, performance.now());
+        State.lastLandmarks = res.faceLandmarks;
         const hasFace = res.faceLandmarks?.length > 0;
         readBlendshapes(res);
         updateAurora();
@@ -338,6 +340,7 @@ function runExerciseMeshLoop() {
       lastVidTime = videoEl.currentTime;
       try {
         const res = State.landmarker.detectForVideo(videoEl, performance.now());
+        State.lastLandmarks = res.faceLandmarks;
         readBlendshapes(res);
         updateAurora();
         advanceGate();
@@ -520,10 +523,13 @@ function runReady(move) {
 }
 
 // --- Active phase: router between detection-gated and timer-paced flows ---
-const DETECTION_MOVES = new Set(["vowel_a_u", "vowel_e_u"]);
+const DETECTION_MOVES = new Set(["vowel_a_u", "vowel_e_u", "pucker_side_to_side", "pucker_circles"]);
 function usesDetection(moveId) {
   return State.mode === "camera_assisted_candidate" && DETECTION_MOVES.has(moveId);
 }
+// Reps per detected move: deliberately shorter than timer-based repeat so the
+// gameplay doesn't take forever when every rep needs a real snap.
+const DETECTION_REPS = { vowel_a_u: 4, vowel_e_u: 4, pucker_side_to_side: 4, pucker_circles: 4 };
 
 function runActive(move) {
   if (usesDetection(move.id)) {
@@ -539,7 +545,7 @@ function runActive(move) {
 function runActiveDetection(move) {
   const s = State.session;
   const moveState = s.moves[s.moveIndex];
-  const requiredReps = move.repeat || 5;
+  const requiredReps = DETECTION_REPS[move.id] || move.repeat || 4;
   const schedule = move.phaseSchedule;
 
   setStageLabel("Match");
@@ -557,14 +563,20 @@ function runActiveDetection(move) {
   };
   stepGatedPhase();
 
-  // Soft safety: 2× the planned active time; if the user is really stuck,
-  // we offer the self-check so they can skip or retry.
+  // Soft safety: 2× the planned active time. If stuck we mark the
+  // move as partial (gracefully honest), flash a quiet checkmark,
+  // and continue to the next move so the ritual flows.
   const maxMs = (move.activeMs || 20000) * 2;
   State.timers.active = setTimeout(() => {
     if (State.phaseGate) {
       moveState.activeElapsedMs = performance.now() - State.phaseGate.startTime;
+      moveState.status = moveState.status === "not_started"
+        ? (State.phaseGate.reps > 0 ? "partial" : "skipped")
+        : moveState.status;
+      moveState.endedAt = new Date().toISOString();
       State.phaseGate = null;
-      showSelfCheck(move);
+      State.active = null;
+      autoAdvance();
     }
   }, maxMs);
 }
@@ -585,13 +597,68 @@ function matchForActivePhase() {
   const a = State.active;
   if (!a) return 0;
   const bs = State.blendshapes;
-  switch (a.moveId + ":" + a.phase) {
-    case "vowel_a_u:a": return Math.min(1, (bs.jawOpen || 0) / 0.35);
+  const pts = State.lastLandmarks?.[0];
+  const key = a.moveId + ":" + a.phase;
+  switch (key) {
+    case "vowel_a_u:a":
+      return Math.min(1, (bs.jawOpen || 0) / 0.35);
     case "vowel_a_u:u":
-    case "vowel_e_u:u": return Math.min(1, (bs.mouthPucker || 0) / 0.45);
-    case "vowel_e_u:e": return Math.min(1, (((bs.mouthSmileLeft || 0) + (bs.mouthSmileRight || 0)) / 2) / 0.30);
+    case "vowel_e_u:u":
+      return Math.min(1, (bs.mouthPucker || 0) / 0.45);
+    case "vowel_e_u:e":
+      return Math.min(1, (((bs.mouthSmileLeft || 0) + (bs.mouthSmileRight || 0)) / 2) / 0.30);
+
+    // Pucker side-to-side: must be puckering AND lip center deviated to the right side
+    case "pucker_side_to_side:left":
+    case "pucker_side_to_side:right": {
+      if (!pts) return 0;
+      const puck = bs.mouthPucker || 0;
+      if (puck < 0.18) return 0;
+      const dev = lipDeviation(pts);
+      if (!dev) return 0;
+      const sign = a.phase === "left" ? 1 : -1;
+      return Math.min(1, Math.max(0, (dev.dx * sign) / 0.085));
+    }
+
+    // Pucker circles: 4-phase cycle; each phase requires lip in the matching quadrant
+    case "pucker_circles:left":
+    case "pucker_circles:right":
+    case "pucker_circles:up":
+    case "pucker_circles:down": {
+      if (!pts) return 0;
+      const puck = bs.mouthPucker || 0;
+      if (puck < 0.18) return 0;
+      const dev = lipDeviation(pts);
+      if (!dev) return 0;
+      let s = 0;
+      switch (a.phase) {
+        case "left":  s = Math.max(0,  dev.dx) / 0.075; break;
+        case "right": s = Math.max(0, -dev.dx) / 0.075; break;
+        case "up":    s = Math.max(0, -dev.dy) / 0.045; break;
+        case "down":  s = Math.max(0,  dev.dy) / 0.045; break;
+      }
+      return Math.min(1, s);
+    }
+
     default: return 0;
   }
+}
+
+// Lip center deviation from nose, normalized by eye distance.
+// dx > 0 means lips moved toward the user's own LEFT (camera's right).
+function lipDeviation(pts) {
+  const nose = pts[1], upperLip = pts[13], lowerLip = pts[14];
+  const lipL = pts[61], lipR = pts[291];
+  const eyeL = pts[33], eyeR = pts[263];
+  if (!nose || !upperLip || !lowerLip || !lipL || !lipR || !eyeL || !eyeR) return null;
+  const eyeDistX = Math.abs(eyeR.x - eyeL.x) || 0.001;
+  const lipCX = (lipL.x + lipR.x) / 2;
+  const lipCY = (upperLip.y + lowerLip.y) / 2;
+  const dx = (lipCX - nose.x) / eyeDistX;
+  // Vertical reference: estimate neutral lip Y as a fixed proportion below nose
+  const neutralY = nose.y + eyeDistX * 0.35;
+  const dy = (lipCY - neutralY) / eyeDistX;
+  return { dx, dy, lipCX, lipCY, noseX: nose.x, noseY: nose.y, eyeDistX };
 }
 
 function advanceGate() {
@@ -628,13 +695,35 @@ function snapRep() {
   if (g.reps >= g.requiredReps) {
     const moveState = State.session.moves[State.session.moveIndex];
     moveState.activeElapsedMs = performance.now() - g.startTime;
+    moveState.status = "completed";
+    moveState.userConfirmed = true;
+    moveState.endedAt = new Date().toISOString();
     State.phaseGate = null;
+    State.active = null;
     if (State.timers.active) { clearTimeout(State.timers.active); State.timers.active = null; }
-    const move = State.routine.moves[State.session.moveIndex];
-    showSelfCheck(move);
+    autoAdvance();
   } else {
     stepGatedPhase();
   }
+}
+
+// Detection-driven moves auto-complete after all reps — no self-check.
+function autoAdvance() {
+  showCompletionFlash();
+  setStageLabel("Done");
+  const cueEl = document.getElementById("phaseCue");
+  const subEl = document.getElementById("phaseSub");
+  if (cueEl) cueEl.textContent = "Nice.";
+  if (subEl) subEl.textContent = "";
+  State.timers.rest = setTimeout(() => nextMove(), 1500);
+}
+
+function showCompletionFlash() {
+  const flash = document.createElement("div");
+  flash.className = "completion-flash";
+  flash.innerHTML = '<span class="mark">✓</span>';
+  document.body.appendChild(flash);
+  setTimeout(() => flash.remove(), 1500);
 }
 
 function flashSnap() {
@@ -1080,7 +1169,103 @@ function drawMesh(canvas, video, landmarks) {
   }
 
   // Dotted target shape for vowel phases — the user matches their lips to this outline.
-  if (State.active) drawPhaseTarget(ctx, pts, w, h, State.active.moveId, State.active.phase);
+  if (State.active) {
+    drawPhaseTarget(ctx, pts, w, h, State.active.moveId, State.active.phase);
+    drawPuckerGuide(ctx, pts, w, h, State.active.moveId, State.active.phase);
+  }
+}
+
+function drawPuckerGuide(ctx, pts, w, h, moveId, phase) {
+  if (moveId !== "pucker_side_to_side" && moveId !== "pucker_circles") return;
+  const dev = lipDeviation(pts);
+  if (!dev) return;
+
+  const noseX = dev.noseX * w;
+  const neutralLipY = (dev.noseY + dev.eyeDistX * 0.35) * h;
+  const eyeDistPx = dev.eyeDistX * w;
+  const matchScore = matchForActivePhase();
+  const warm = matchScore;
+  const gateFill = State.phaseGate?.fill || 0;
+
+  ctx.save();
+
+  if (moveId === "pucker_side_to_side") {
+    const sign = phase === "left" ? 1 : -1;
+    const targetX = noseX + sign * eyeDistPx * 0.1;
+    const targetR = eyeDistPx * 0.045;
+
+    // Target zone
+    ctx.strokeStyle = `rgba(255, ${210 - warm * 60}, ${160 - warm * 110}, ${0.6 + warm * 0.4})`;
+    ctx.lineWidth = 2 + warm * 1.5;
+    ctx.setLineDash(warm > 0.55 ? [] : [6, 5]);
+    ctx.shadowColor = `rgba(255,210,170,${0.3 + warm * 0.6})`;
+    ctx.shadowBlur = 10 + warm * 20;
+    ctx.beginPath();
+    ctx.arc(targetX, neutralLipY, targetR, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Fill (gateFill grows while matching)
+    if (gateFill > 0.02) {
+      ctx.setLineDash([]);
+      ctx.shadowBlur = 0;
+      const grad = ctx.createRadialGradient(targetX, neutralLipY, 0, targetX, neutralLipY, targetR);
+      grad.addColorStop(0, `rgba(255,210,160,${gateFill * 0.6})`);
+      grad.addColorStop(1, "rgba(255,160,110,0)");
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(targetX, neutralLipY, targetR * (0.7 + gateFill * 0.3), 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+  }
+
+  if (moveId === "pucker_circles") {
+    const centerX = noseX;
+    const centerY = neutralLipY;
+    const radius = eyeDistPx * 0.095;
+
+    // Dashed track
+    ctx.strokeStyle = "rgba(255,255,255,0.3)";
+    ctx.lineWidth = 1.4;
+    ctx.setLineDash([5, 5]);
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Target position on the ring
+    const angles = { left: 0, up: -Math.PI / 2, right: Math.PI, down: Math.PI / 2 };
+    const angle = angles[phase];
+    if (angle === undefined) { ctx.restore(); return; }
+    const tx = centerX + Math.cos(angle) * radius;
+    const ty = centerY + Math.sin(angle) * radius;
+    const targetR = eyeDistPx * 0.038;
+
+    // Target marker
+    ctx.strokeStyle = `rgba(255, ${210 - warm * 60}, ${160 - warm * 110}, ${0.75 + warm * 0.25})`;
+    ctx.lineWidth = 2 + warm * 1.5;
+    ctx.setLineDash(warm > 0.55 ? [] : [5, 4]);
+    ctx.shadowColor = `rgba(255,210,170,${0.3 + warm * 0.6})`;
+    ctx.shadowBlur = 10 + warm * 18;
+    ctx.beginPath();
+    ctx.arc(tx, ty, targetR, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Fill
+    if (gateFill > 0.02) {
+      ctx.setLineDash([]);
+      ctx.shadowBlur = 0;
+      const grad = ctx.createRadialGradient(tx, ty, 0, tx, ty, targetR);
+      grad.addColorStop(0, `rgba(255,210,160,${gateFill * 0.6})`);
+      grad.addColorStop(1, "rgba(255,160,110,0)");
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(tx, ty, targetR * (0.7 + gateFill * 0.3), 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+  }
+
+  ctx.restore();
 }
 
 function drawPhaseTarget(ctx, pts, w, h, moveId, phase) {
@@ -1154,13 +1339,6 @@ function drawPhaseTarget(ctx, pts, w, h, moveId, phase) {
   ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
   ctx.stroke();
 
-  // Label with the vowel; grows slightly when matched
-  ctx.shadowBlur = 0;
-  ctx.setLineDash([]);
-  ctx.fillStyle = `rgba(${r},${g+10},${b+30},${0.75 + warm * 0.25})`;
-  ctx.font = `${Math.max(14, w / 36) + warm * 4}px -apple-system, sans-serif`;
-  ctx.textAlign = "center";
-  ctx.fillText(phase.toUpperCase(), cx, cy - ry - Math.max(10, w / 60));
   ctx.restore();
 }
 
