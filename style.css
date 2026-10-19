@@ -836,14 +836,14 @@ ul, ol { list-style: none; }
   max-width: 20em;
 }
 
-/* rhythm dots */
+/* rhythm / rep dots — quality-tiered */
 .rhythm-dots {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   justify-content: center;
 }
 .rhythm-dots .r {
-  width: 8px; height: 8px;
+  width: 10px; height: 10px;
   border-radius: 50%;
   background: rgba(255,255,255,.18);
   transition: background .3s ease, transform .35s cubic-bezier(.3,0,.2,1), box-shadow .3s ease;
@@ -853,22 +853,82 @@ ul, ol { list-style: none; }
   transform: scale(1.4);
   box-shadow: 0 0 12px rgba(234,209,181,.8);
 }
-.rhythm-dots .r.done {
+.rhythm-dots .r.done.p0 {
+  background: rgba(255,255,255,.3);
+  transform: scale(1.05);
+}
+.rhythm-dots .r.done.p1 {
+  background: linear-gradient(135deg,#ffdfae,#ffb27a);
+  transform: scale(1.2);
+  box-shadow: 0 0 10px rgba(255,180,140,.5);
+}
+.rhythm-dots .r.done.p2 {
   background: linear-gradient(135deg,#ffcf8a,#ff8a9a);
-  transform: scale(1.25);
-  box-shadow: 0 0 10px rgba(255,160,140,.6);
+  transform: scale(1.3);
+  box-shadow: 0 0 14px rgba(255,140,160,.65);
+}
+.rhythm-dots .r.done.p3 {
+  background: linear-gradient(135deg,#fff2d3,#ff7cb9 60%,#9668ff);
+  transform: scale(1.4);
+  box-shadow: 0 0 18px rgba(255,180,220,.85), 0 0 36px rgba(150,100,255,.4);
 }
 
-/* Snap feedback on completed rep */
+/* Snap feedback — scaled by petal quality */
 .phase-stage.snap {
   animation: snapPulse .65s cubic-bezier(.3,0,.2,1) both;
 }
+.phase-stage.snap-2 { animation: snapPulse2 .75s cubic-bezier(.3,0,.2,1) both; }
+.phase-stage.snap-3 { animation: snapPulse3 .85s cubic-bezier(.3,0,.2,1) both; }
 @keyframes snapPulse {
-  0%   { transform: scale(1);   filter: brightness(1); }
-  25%  { transform: scale(1.1); filter: brightness(1.4) saturate(1.3); }
-  60%  { transform: scale(1);   filter: brightness(1.15) saturate(1.1); }
-  100% { transform: scale(1);   filter: brightness(1); }
+  0%   { transform: scale(1);    filter: brightness(1); }
+  25%  { transform: scale(1.08); filter: brightness(1.3) saturate(1.2); }
+  100% { transform: scale(1);    filter: brightness(1); }
 }
+@keyframes snapPulse2 {
+  0%   { transform: scale(1);    filter: brightness(1); }
+  25%  { transform: scale(1.15); filter: brightness(1.45) saturate(1.4); }
+  60%  { transform: scale(1.03); filter: brightness(1.2) saturate(1.2); }
+  100% { transform: scale(1);    filter: brightness(1); }
+}
+@keyframes snapPulse3 {
+  0%   { transform: scale(1);    filter: brightness(1) hue-rotate(0deg); }
+  20%  { transform: scale(1.22); filter: brightness(1.6) saturate(1.5) hue-rotate(10deg); }
+  55%  { transform: scale(1.05); filter: brightness(1.3) saturate(1.3); }
+  100% { transform: scale(1);    filter: brightness(1); }
+}
+
+/* Cue-card pulse so the user feels the hit even when phase-stage is hidden */
+.phase-copy.snap-pulse, .cue-card.snap-pulse {
+  animation: cueSnap .55s cubic-bezier(.3,0,.2,1) both;
+}
+.phase-copy.pq-2, .cue-card.pq-2 { box-shadow: 0 0 24px rgba(255,160,180,.45); }
+.phase-copy.pq-3, .cue-card.pq-3 { box-shadow: 0 0 32px rgba(255,160,220,.65), 0 0 72px rgba(150,100,255,.35); }
+@keyframes cueSnap {
+  0%   { transform: translateX(-50%) scale(1); }
+  40%  { transform: translateX(-50%) scale(1.06); }
+  100% { transform: translateX(-50%) scale(1); }
+}
+
+/* Mandala petal richness by session quality */
+.mandala .petal.q0 { filter: blur(10px) saturate(.8); opacity: .35; }
+.mandala .petal.q1 { filter: blur(6px)  saturate(1.2); }
+.mandala .petal.q2 { filter: blur(4px)  saturate(1.5); }
+.mandala .petal.q3 {
+  filter: blur(3px) saturate(1.8) drop-shadow(0 0 10px rgba(255,180,220,.6));
+}
+
+/* Sound toggle button in the exercise topbar */
+.audio-toggle {
+  background: rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.12);
+  color: rgba(243,238,230,.8);
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  display: grid; place-items: center;
+  font-size: 14px;
+  cursor: pointer;
+}
+.audio-toggle.on { background: var(--accent); color: #1a1a1a; }
 
 .exercise-footer {
   position: relative; z-index: 2;

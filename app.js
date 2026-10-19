@@ -183,6 +183,11 @@ const Actions = {
   selfCompleted:  () => handleSelfResult("completed"),
   selfRetry:      () => handleSelfResult("retry"),
   selfSkip:       () => handleSelfResult("skipped"),
+  toggleSound:    () => {
+    AudioEngine.setEnabled(!AudioEngine.enabled);
+    document.getElementById("soundToggle")?.classList.toggle("on", AudioEngine.enabled);
+    if (AudioEngine.enabled) AudioEngine.tone(660, 120, "sine", 0.08);
+  },
 };
 
 // =========================================================
@@ -555,17 +560,23 @@ function runActiveDetection(move) {
   const schedule = move.phaseSchedule;
 
   setStageLabel("Match");
-  renderRhythmDots(requiredReps, 0);
+  renderRepDots(requiredReps, []);
 
   State.phaseGate = {
     moveId: move.id,
     phases: schedule,
     phaseIdx: 0,
     fill: 0,
+    peakPrecision: 0,
     reps: 0,
     requiredReps,
     startTime: performance.now(),
     lastTick: performance.now(),
+    lastTextUpdate: 0,
+    lastBucket: null,
+    lastOvershoot: null,
+    lastSoundBucket: null,
+    petals: [],
   };
   stepGatedPhase();
 
@@ -593,61 +604,173 @@ function stepGatedPhase() {
   const p = g.phases[g.phaseIdx % g.phases.length];
   State.active = { moveId: g.moveId, phase: p.phase };
   g.fill = 0;
+  g.peakPrecision = 0;
   g.lastTick = performance.now();
+  g.lastTextUpdate = 0;
+  g.lastBucket = null;
+  g.lastOvershoot = null;
   document.getElementById("phaseCue").textContent = p.cue.en;
-  document.getElementById("phaseSub").textContent = `Hold the ${p.phase.toUpperCase()} shape`;
+  document.getElementById("phaseSub").textContent = pickFromBank(FEEDBACK_BANKS.waiting);
   setPhaseVisual(phaseVisualFor(g.moveId, p.phase));
 }
 
+// Legacy wrapper for drawPhaseTarget outline coloring — just precision now.
 function matchForActivePhase() {
+  return evaluatePrecision()?.precision || 0;
+}
+
+// Soft-band precision: 1.0 at ideal, 0 beyond hard tolerance. Symmetric
+// around the ideal so both under- and over-shoot cost quality.
+function softPrecision(value, ideal, soft, hard) {
+  const diff = Math.abs(value - ideal);
+  if (diff <= soft) return 1 - (diff / soft) * 0.25;    // 1.0 → 0.75 across the soft band
+  if (diff >= hard) return 0;
+  return 0.75 * (1 - (diff - soft) / (hard - soft));
+}
+
+// Ramp-and-hold precision: for positional measures where "reach the target"
+// matters. Below `start` = 0, climbs to 1.0 at `ideal`, stays 1.0 up to
+// `overLimit`, then falls off.
+function rampPrecision(value, start, ideal, overLimit) {
+  if (value < start) return 0;
+  if (value < ideal) return (value - start) / (ideal - start);
+  if (value < overLimit) return 1;
+  return Math.max(0, 1 - (value - overLimit) / 0.08);
+}
+
+// Per-phase precision targets. Blend-based for vowel moves; combined
+// pucker-intensity × lip-position for the pucker moves.
+const PRECISION_TARGETS = {
+  "vowel_a_u:a":  { kind: "blend", bs: "jawOpen",         ideal: 0.35, soft: 0.08, hard: 0.18, hintKey: "jawOpen" },
+  "vowel_a_u:u":  { kind: "blend", bs: "mouthPucker",     ideal: 0.50, soft: 0.10, hard: 0.22, hintKey: "mouthPucker" },
+  "vowel_e_u:u":  { kind: "blend", bs: "mouthPucker",     ideal: 0.50, soft: 0.10, hard: 0.22, hintKey: "mouthPucker" },
+  "vowel_e_u:e":  { kind: "blend-avg", bs: ["mouthSmileLeft","mouthSmileRight"], ideal: 0.33, soft: 0.08, hard: 0.18, hintKey: "mouthSmile" },
+  "pucker_side_to_side:left":  { kind: "pucker-lateral", sign:  1 },
+  "pucker_side_to_side:right": { kind: "pucker-lateral", sign: -1 },
+  "pucker_circles:left":  { kind: "pucker-quadrant", axis: "x", sign:  1 },
+  "pucker_circles:right": { kind: "pucker-quadrant", axis: "x", sign: -1 },
+  "pucker_circles:up":    { kind: "pucker-quadrant", axis: "y", sign: -1 },
+  "pucker_circles:down":  { kind: "pucker-quadrant", axis: "y", sign:  1 },
+};
+
+function evaluatePrecision() {
   const a = State.active;
-  if (!a) return 0;
+  if (!a) return null;
+  const target = PRECISION_TARGETS[a.moveId + ":" + a.phase];
+  if (!target) return null;
   const bs = State.blendshapes;
   const pts = State.lastLandmarks?.[0];
-  const key = a.moveId + ":" + a.phase;
-  switch (key) {
-    case "vowel_a_u:a":
-      return Math.min(1, (bs.jawOpen || 0) / 0.35);
-    case "vowel_a_u:u":
-    case "vowel_e_u:u":
-      return Math.min(1, (bs.mouthPucker || 0) / 0.45);
-    case "vowel_e_u:e":
-      return Math.min(1, (((bs.mouthSmileLeft || 0) + (bs.mouthSmileRight || 0)) / 2) / 0.30);
 
-    // Pucker side-to-side: must be puckering AND lip center deviated to the right side
-    case "pucker_side_to_side:left":
-    case "pucker_side_to_side:right": {
-      if (!pts) return 0;
-      const puck = bs.mouthPucker || 0;
-      if (puck < 0.18) return 0;
-      const dev = lipDeviation(pts);
-      if (!dev) return 0;
-      const sign = a.phase === "left" ? 1 : -1;
-      return Math.min(1, Math.max(0, (dev.dx * sign) / 0.085));
-    }
-
-    // Pucker circles: 4-phase cycle; each phase requires lip in the matching quadrant
-    case "pucker_circles:left":
-    case "pucker_circles:right":
-    case "pucker_circles:up":
-    case "pucker_circles:down": {
-      if (!pts) return 0;
-      const puck = bs.mouthPucker || 0;
-      if (puck < 0.18) return 0;
-      const dev = lipDeviation(pts);
-      if (!dev) return 0;
-      let s = 0;
-      switch (a.phase) {
-        case "left":  s = Math.max(0,  dev.dx) / 0.075; break;
-        case "right": s = Math.max(0, -dev.dx) / 0.075; break;
-        case "up":    s = Math.max(0, -dev.dy) / 0.045; break;
-        case "down":  s = Math.max(0,  dev.dy) / 0.045; break;
-      }
-      return Math.min(1, s);
-    }
-
-    default: return 0;
+  if (target.kind === "blend") {
+    const value = bs[target.bs] || 0;
+    return {
+      precision: softPrecision(value, target.ideal, target.soft, target.hard),
+      direction: value - target.ideal,
+      hintKey: target.hintKey,
+    };
   }
+  if (target.kind === "blend-avg") {
+    const value = target.bs.reduce((s, k) => s + (bs[k] || 0), 0) / target.bs.length;
+    return {
+      precision: softPrecision(value, target.ideal, target.soft, target.hard),
+      direction: value - target.ideal,
+      hintKey: target.hintKey,
+    };
+  }
+  if (target.kind === "pucker-lateral") {
+    if (!pts) return null;
+    const puckerVal = bs.mouthPucker || 0;
+    const puckerPrec = softPrecision(puckerVal, 0.45, 0.15, 0.3);
+    const d = lipDeviation(pts);
+    if (!d) return null;
+    const axisValue = d.dx * target.sign;
+    const posPrec = rampPrecision(axisValue, 0.04, 0.11, 0.2);
+    return {
+      precision: puckerPrec * posPrec,
+      direction: axisValue - 0.11,
+      hintKey: puckerPrec < posPrec ? "mouthPucker" : "position",
+    };
+  }
+  if (target.kind === "pucker-quadrant") {
+    if (!pts) return null;
+    const puckerVal = bs.mouthPucker || 0;
+    const puckerPrec = softPrecision(puckerVal, 0.45, 0.15, 0.3);
+    const d = lipDeviation(pts);
+    if (!d) return null;
+    const axisValue = (target.axis === "x" ? d.dx : d.dy) * target.sign;
+    const ideal = target.axis === "x" ? 0.09 : 0.055;
+    const posPrec = rampPrecision(axisValue, 0.025, ideal, ideal + 0.07);
+    return {
+      precision: puckerPrec * posPrec,
+      direction: axisValue - ideal,
+      hintKey: puckerPrec < posPrec ? "mouthPucker" : "position",
+    };
+  }
+  return null;
+}
+
+// --- Lively feedback copy ---
+const FEEDBACK_BANKS = {
+  waiting: ["ready when you are", "take a breath", "soft start"],
+  far:     ["going there", "a bit more", "finding it"],
+  closer:  ["closer…", "almost", "just a little more"],
+  good:    ["nice, hold", "steady", "stay with it", "yes"],
+  perfect: ["beautiful", "exactly", "perfect", "hold it there"],
+};
+const UNDER_HINTS = {
+  jawOpen:     ["open a touch wider", "gently open more"],
+  mouthPucker: ["round the lips more", "pucker gently in"],
+  mouthSmile:  ["widen the corners", "corners out"],
+  position:    ["drift it that way", "slide a bit further"],
+};
+const OVER_HINTS = {
+  jawOpen:     ["softer", "ease it back"],
+  mouthPucker: ["ease the pucker", "soft round, not tight"],
+  mouthSmile:  ["gentle, not forced"],
+  position:    ["slow back toward center", "softer, don't push"],
+};
+
+function pickFromBank(bank) {
+  return bank[Math.floor(Math.random() * bank.length)];
+}
+
+function updateFeedback(precision, result) {
+  const g = State.phaseGate;
+  if (!g || !result) return;
+  let bucket;
+  if (precision < 0.08) bucket = "waiting";
+  else if (precision < 0.3) bucket = "far";
+  else if (precision < 0.6) bucket = "closer";
+  else if (precision < 0.85) bucket = "good";
+  else bucket = "perfect";
+
+  // Over-shoot nudge takes precedence when they're off the mark and above the ideal
+  const overshoot = (result.direction || 0) > 0 && precision < 0.7;
+
+  // Only re-pick copy when the bucket actually changes (prevents flicker).
+  if (bucket === g.lastBucket && overshoot === g.lastOvershoot) return;
+  g.lastBucket = bucket;
+  g.lastOvershoot = overshoot;
+
+  let text;
+  if (bucket === "waiting" || bucket === "far") {
+    const hintSet = overshoot ? OVER_HINTS : UNDER_HINTS;
+    text = pickFromBank(hintSet[result.hintKey] || hintSet.position);
+  } else if (bucket === "closer" && overshoot) {
+    text = pickFromBank(OVER_HINTS[result.hintKey] || OVER_HINTS.position);
+  } else {
+    text = pickFromBank(FEEDBACK_BANKS[bucket]);
+  }
+
+  const subEl = document.getElementById("phaseSub");
+  if (subEl) subEl.textContent = text;
+
+  // Play a soft audio bump when crossing into "good" or "perfect".
+  if ((bucket === "good" || bucket === "perfect") && g.lastSoundBucket !== bucket) {
+    AudioEngine.transition(bucket === "perfect" ? 660 : 494);
+    g.lastSoundBucket = bucket;
+  }
+  if (bucket === "far" || bucket === "waiting") g.lastSoundBucket = null;
 }
 
 // Lip center deviation from nose, normalized by eye distance.
@@ -674,16 +797,27 @@ function advanceGate() {
   const dt = Math.min(0.1, (now - g.lastTick) / 1000);
   g.lastTick = now;
 
-  const match = matchForActivePhase();
-  const HOLD = 0.6;              // threshold to count as "matching"
-  const FILL_TIME = 1.0;         // seconds of full match -> snap
-  const DRAIN_TIME = 1.6;        // seconds to fully drain
+  const result = evaluatePrecision();
+  const precision = result?.precision || 0;
 
-  if (match >= HOLD) {
-    g.fill = Math.min(1, g.fill + (match * dt) / FILL_TIME);
+  // Track peak precision this rep so we can award petals at snap time.
+  if (precision > (g.peakPrecision || 0)) g.peakPrecision = precision;
+
+  const MIN_FILL = 0.3;          // precision below this = drain
+  const FILL_TIME = 1.1;         // seconds at precision 1 to fill
+  const DRAIN_TIME = 1.4;        // seconds to fully drain
+
+  if (precision >= MIN_FILL) {
+    g.fill = Math.min(1, g.fill + (precision * dt) / FILL_TIME);
     if (State.observations) State.observations.matchedMs += dt * 1000;
   } else {
     g.fill = Math.max(0, g.fill - dt / DRAIN_TIME);
+  }
+
+  // Feedback copy — throttled so it doesn't flicker every frame.
+  if (now - (g.lastTextUpdate || 0) > 320) {
+    g.lastTextUpdate = now;
+    updateFeedback(precision, result);
   }
 
   if (g.fill >= 1) snapRep();
@@ -692,11 +826,20 @@ function advanceGate() {
 function snapRep() {
   const g = State.phaseGate;
   if (!g) return;
+  const peak = g.peakPrecision || 0;
+  const petals = peak >= 0.9 ? 3 : peak >= 0.7 ? 2 : peak >= 0.5 ? 1 : 0;
+  g.petals = g.petals || [];
+  g.petals.push(petals);
   g.reps++;
   g.phaseIdx++;
   g.fill = 0;
-  renderRhythmDots(g.requiredReps, g.reps);
-  flashSnap();
+  g.peakPrecision = 0;
+  g.lastBucket = null;
+  g.lastOvershoot = null;
+  g.lastSoundBucket = null;
+  renderRepDots(g.requiredReps, g.petals);
+  flashSnap(petals);
+  AudioEngine.snap(petals);
 
   if (g.reps >= g.requiredReps) {
     const moveState = State.session.moves[State.session.moveIndex];
@@ -704,43 +847,138 @@ function snapRep() {
     moveState.status = "completed";
     moveState.userConfirmed = true;
     moveState.endedAt = new Date().toISOString();
+    moveState.repPetals = [...g.petals];
+    moveState.quality = g.petals.reduce((s, p) => s + p, 0);          // 0..12
     State.phaseGate = null;
     State.active = null;
     if (State.timers.active) { clearTimeout(State.timers.active); State.timers.active = null; }
-    autoAdvance();
+    autoAdvance(moveState.quality);
   } else {
     stepGatedPhase();
   }
 }
 
+// Rep dots: solid gradient = this rep earned petals; dim circle = still to do.
+// Also records petal rating as text ("•••", "••·", etc.) inside the dot.
+function renderRepDots(total, petalsPerRep) {
+  const el = document.getElementById("rhythmDots");
+  if (!el) return;
+  el.innerHTML = "";
+  for (let i = 0; i < total; i++) {
+    const s = document.createElement("span");
+    const p = petalsPerRep?.[i];
+    if (p === undefined) {
+      s.className = i === (petalsPerRep?.length || 0) ? "r on" : "r";
+    } else {
+      s.className = "r done p" + p;
+    }
+    el.appendChild(s);
+  }
+}
+
 // Detection-driven moves auto-complete after all reps — no self-check.
-function autoAdvance() {
-  showCompletionFlash();
+// The headline + glow scale with the earned quality so a 12/12 move
+// feels different from a 4/12 one.
+function autoAdvance(quality) {
+  showCompletionFlash(quality);
+  AudioEngine.complete(quality);
   setStageLabel("Done");
   const cueEl = document.getElementById("phaseCue");
   const subEl = document.getElementById("phaseSub");
-  if (cueEl) cueEl.textContent = "Nice.";
+  const text = quality === undefined
+    ? "nice."
+    : quality >= 10 ? "stunning."
+    : quality >= 7  ? "that was lovely."
+    : quality >= 4  ? "nice work."
+    : "you kept going.";
+  if (cueEl) cueEl.textContent = text;
   if (subEl) subEl.textContent = "";
-  State.timers.rest = setTimeout(() => nextMove(), 1500);
+  State.timers.rest = setTimeout(() => nextMove(), 1800);
 }
 
-function showCompletionFlash() {
+function showCompletionFlash(quality) {
   const flash = document.createElement("div");
   flash.className = "completion-flash";
+  if (quality !== undefined) flash.dataset.quality = quality;
   flash.innerHTML = '<span class="mark">✓</span>';
   document.body.appendChild(flash);
-  setTimeout(() => flash.remove(), 1500);
+  setTimeout(() => flash.remove(), 1600);
 }
 
-function flashSnap() {
+function flashSnap(petals) {
   const stage = document.getElementById("phaseStage");
-  if (!stage) return;
-  stage.classList.remove("snap");
-  // Force reflow so the class re-applies and the animation restarts.
-  void stage.offsetWidth;
-  stage.classList.add("snap");
-  setTimeout(() => stage.classList.remove("snap"), 650);
+  if (stage) {
+    stage.classList.remove("snap", "snap-1", "snap-2", "snap-3");
+    void stage.offsetWidth;
+    stage.classList.add("snap", "snap-" + (petals ?? 1));
+    setTimeout(() => stage.classList.remove("snap", "snap-1", "snap-2", "snap-3"), 700);
+  }
+  // Snap also pulses the cue card so it reads even when phase-stage is hidden
+  const cue = document.querySelector(".phase-copy") || document.querySelector(".cue-card");
+  if (cue) {
+    cue.classList.remove("snap-pulse", "pq-1", "pq-2", "pq-3");
+    void cue.offsetWidth;
+    cue.classList.add("snap-pulse", "pq-" + (petals ?? 1));
+    setTimeout(() => cue.classList.remove("snap-pulse", "pq-1", "pq-2", "pq-3"), 700);
+  }
 }
+
+// =====================================================
+// AudioEngine — simple Web Audio chimes. Muted by default, user toggles.
+// =====================================================
+const AudioEngine = {
+  ctx: null,
+  enabled: false,
+  init() {
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (AC) this.ctx = new AC();
+    } catch {}
+  },
+  resume() {
+    if (this.ctx?.state === "suspended") this.ctx.resume();
+  },
+  setEnabled(on) {
+    this.enabled = on;
+    if (on && !this.ctx) this.init();
+    if (on) this.resume();
+  },
+  tone(freq, duration = 180, type = "sine", vol = 0.08) {
+    if (!this.enabled || !this.ctx) return;
+    try {
+      const t = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, t);
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(vol, t + 0.025);
+      gain.gain.exponentialRampToValueAtTime(0.0005, t + duration / 1000);
+      osc.connect(gain).connect(this.ctx.destination);
+      osc.start(t);
+      osc.stop(t + duration / 1000 + 0.05);
+    } catch {}
+  },
+  transition(freq = 494) {
+    this.tone(freq, 140, "sine", 0.06);
+  },
+  snap(petals) {
+    if (!this.enabled) return;
+    const base = petals === 3 ? 523 : petals === 2 ? 494 : petals === 1 ? 440 : 294;
+    this.tone(base, 220, "triangle", 0.1);
+    if (petals >= 2) setTimeout(() => this.tone(base * 1.25, 220, "triangle", 0.09), 90);
+    if (petals >= 3) setTimeout(() => this.tone(base * 1.5, 280, "triangle", 0.11), 180);
+  },
+  complete(quality) {
+    if (!this.enabled) return;
+    const notes = quality >= 10 ? [523, 659, 784, 1047]
+                : quality >= 7  ? [523, 659, 784]
+                : quality >= 4  ? [440, 523, 659]
+                : [392, 440];
+    notes.forEach((f, i) => setTimeout(() => this.tone(f, 260, "triangle", 0.09), i * 110));
+  },
+};
+window.AudioEngine = AudioEngine;
 
 // Timer-paced active (original flow): used in Guided mode and for moves
 // MediaPipe cannot honestly observe (tongue, air, cheek draw-in, circles).
@@ -1402,7 +1640,11 @@ function renderMandala(session) {
     if (m.status !== "completed" && m.status !== "partial") return;
     const preset = PETAL_PRESETS[i];
     const petal = document.createElement("div");
-    petal.className = "petal show" + (m.status === "partial" ? " partial" : "");
+    // Petal richness reflects session quality (0..12) if we tracked petals,
+    // otherwise falls back to the status.
+    const q = typeof m.quality === "number" ? m.quality : (m.status === "completed" ? 7 : 3);
+    const tier = q >= 10 ? "q3" : q >= 7 ? "q2" : q >= 4 ? "q1" : "q0";
+    petal.className = `petal show ${tier}` + (m.status === "partial" ? " partial" : "");
     petal.style.background = preset.grad;
     petal.style.setProperty("--rot", preset.rot + "deg");
     petal.style.animationDelay = (0.15 + i * 0.14) + "s";
@@ -1464,6 +1706,7 @@ window.FaceYoga = {
   DETECTION_REPS,
   Stickers,
   StickerLayer,
+  AudioEngine,
   show,
   startSession,
   runActive,
@@ -1478,6 +1721,9 @@ window.FaceYoga = {
   nextMove,
   teardownExercise,
   bindActions,
+  renderMandala,
+  renderRepDots,
+  evaluatePrecision,
   async loadRoutine() {
     const res = await fetch("routine.v2.json");
     State.routine = await res.json();

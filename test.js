@@ -68,6 +68,11 @@ document.getElementById("testRelease").addEventListener("click", () =>
 document.getElementById("testForceSnap").addEventListener("click", () => {
   if (FY.State.phaseGate) FY.State.phaseGate.fill = 1.01;
 });
+document.getElementById("testSound").addEventListener("click", (e) => {
+  FY.AudioEngine.setEnabled(!FY.AudioEngine.enabled);
+  e.target.textContent = FY.AudioEngine.enabled ? "♪ on" : "♪ sound";
+  if (FY.AudioEngine.enabled) FY.AudioEngine.tone(660, 120, "sine", 0.08);
+});
 
 function setSliders({ jaw, puck, smile, dx, dy }) {
   sliders.sJaw.value = jaw;
