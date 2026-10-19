@@ -115,7 +115,8 @@ const State = {
   timers: { phase: null, active: null, demo: null, ready: null, rest: null, setup: null, mesh: null },
   active: null,                                       // { moveId, phase } while a phase is on-screen
   blendshapes: {},                                    // EMA-smoothed category -> score
-  observations: null,                                 // { longestVowelMatchMs, smileWarmth }
+  observations: null,                                 // { matchedMs, smileWarmth, samples }
+  phaseGate: null,                                    // active detection-gated phase state
   paused: false,
   wakeLock: null,
 };
@@ -339,6 +340,7 @@ function runExerciseMeshLoop() {
         const res = State.landmarker.detectForVideo(videoEl, performance.now());
         readBlendshapes(res);
         updateAurora();
+        advanceGate();
         drawMesh(meshEl, videoEl, res.faceLandmarks);
         Stickers.exercise.update(res.faceLandmarks, meshEl);
         if (res.faceLandmarks?.length) meshEl.classList.add("on");
@@ -461,6 +463,7 @@ function clearPhaseTimers() {
     if (t) { clearTimeout(t); clearInterval(t); State.timers[k] = null; }
   });
   State.active = null;
+  State.phaseGate = null;
 }
 
 function nextMove() {
@@ -516,8 +519,137 @@ function runReady(move) {
   }, 1000);
 }
 
-// --- Active phase: schedule all phases across repeats ---
+// --- Active phase: router between detection-gated and timer-paced flows ---
+const DETECTION_MOVES = new Set(["vowel_a_u", "vowel_e_u"]);
+function usesDetection(moveId) {
+  return State.mode === "camera_assisted_candidate" && DETECTION_MOVES.has(moveId);
+}
+
 function runActive(move) {
+  if (usesDetection(move.id)) {
+    runActiveDetection(move);
+  } else {
+    runActivePaced(move);
+  }
+}
+
+// Detection-gated: each phase is held until the user actually matches the
+// target shape for long enough to "snap". No per-phase timer — the user
+// drives the pace. A soft overall timeout protects against hanging.
+function runActiveDetection(move) {
+  const s = State.session;
+  const moveState = s.moves[s.moveIndex];
+  const requiredReps = move.repeat || 5;
+  const schedule = move.phaseSchedule;
+
+  setStageLabel("Match");
+  renderRhythmDots(requiredReps, 0);
+
+  State.phaseGate = {
+    moveId: move.id,
+    phases: schedule,
+    phaseIdx: 0,
+    fill: 0,
+    reps: 0,
+    requiredReps,
+    startTime: performance.now(),
+    lastTick: performance.now(),
+  };
+  stepGatedPhase();
+
+  // Soft safety: 2× the planned active time; if the user is really stuck,
+  // we offer the self-check so they can skip or retry.
+  const maxMs = (move.activeMs || 20000) * 2;
+  State.timers.active = setTimeout(() => {
+    if (State.phaseGate) {
+      moveState.activeElapsedMs = performance.now() - State.phaseGate.startTime;
+      State.phaseGate = null;
+      showSelfCheck(move);
+    }
+  }, maxMs);
+}
+
+function stepGatedPhase() {
+  const g = State.phaseGate;
+  if (!g) return;
+  const p = g.phases[g.phaseIdx % g.phases.length];
+  State.active = { moveId: g.moveId, phase: p.phase };
+  g.fill = 0;
+  g.lastTick = performance.now();
+  document.getElementById("phaseCue").textContent = p.cue.en;
+  document.getElementById("phaseSub").textContent = `Hold the ${p.phase.toUpperCase()} shape`;
+  setPhaseVisual(phaseVisualFor(g.moveId, p.phase));
+}
+
+function matchForActivePhase() {
+  const a = State.active;
+  if (!a) return 0;
+  const bs = State.blendshapes;
+  switch (a.moveId + ":" + a.phase) {
+    case "vowel_a_u:a": return Math.min(1, (bs.jawOpen || 0) / 0.35);
+    case "vowel_a_u:u":
+    case "vowel_e_u:u": return Math.min(1, (bs.mouthPucker || 0) / 0.45);
+    case "vowel_e_u:e": return Math.min(1, (((bs.mouthSmileLeft || 0) + (bs.mouthSmileRight || 0)) / 2) / 0.30);
+    default: return 0;
+  }
+}
+
+function advanceGate() {
+  const g = State.phaseGate;
+  if (!g || State.paused) { if (g) g.lastTick = performance.now(); return; }
+  const now = performance.now();
+  const dt = Math.min(0.1, (now - g.lastTick) / 1000);
+  g.lastTick = now;
+
+  const match = matchForActivePhase();
+  const HOLD = 0.6;              // threshold to count as "matching"
+  const FILL_TIME = 1.0;         // seconds of full match -> snap
+  const DRAIN_TIME = 1.6;        // seconds to fully drain
+
+  if (match >= HOLD) {
+    g.fill = Math.min(1, g.fill + (match * dt) / FILL_TIME);
+    if (State.observations) State.observations.matchedMs += dt * 1000;
+  } else {
+    g.fill = Math.max(0, g.fill - dt / DRAIN_TIME);
+  }
+
+  if (g.fill >= 1) snapRep();
+}
+
+function snapRep() {
+  const g = State.phaseGate;
+  if (!g) return;
+  g.reps++;
+  g.phaseIdx++;
+  g.fill = 0;
+  renderRhythmDots(g.requiredReps, g.reps);
+  flashSnap();
+
+  if (g.reps >= g.requiredReps) {
+    const moveState = State.session.moves[State.session.moveIndex];
+    moveState.activeElapsedMs = performance.now() - g.startTime;
+    State.phaseGate = null;
+    if (State.timers.active) { clearTimeout(State.timers.active); State.timers.active = null; }
+    const move = State.routine.moves[State.session.moveIndex];
+    showSelfCheck(move);
+  } else {
+    stepGatedPhase();
+  }
+}
+
+function flashSnap() {
+  const stage = document.getElementById("phaseStage");
+  if (!stage) return;
+  stage.classList.remove("snap");
+  // Force reflow so the class re-applies and the animation restarts.
+  void stage.offsetWidth;
+  stage.classList.add("snap");
+  setTimeout(() => stage.classList.remove("snap"), 650);
+}
+
+// Timer-paced active (original flow): used in Guided mode and for moves
+// MediaPipe cannot honestly observe (tongue, air, cheek draw-in, circles).
+function runActivePaced(move) {
   const sched = buildPhaseTimeline(move);
   const s = State.session;
   const moveState = s.moves[s.moveIndex];
@@ -527,7 +659,6 @@ function runActive(move) {
 
   let i = 0;
   const activeStart = performance.now();
-  let cycleOffset = 0;
   let lastCycleIdx = -1;
 
   const runPhase = () => {
@@ -546,7 +677,6 @@ function runActive(move) {
     document.getElementById("phaseSub").textContent = "";
     setPhaseVisual(phaseVisualFor(move.id, p.phase));
 
-    // Light up current cycle dot
     if (p.cycleIdx !== lastCycleIdx) {
       lastCycleIdx = p.cycleIdx;
       renderRhythmDots(cycleCountFor(move), p.cycleIdx);
@@ -983,12 +1113,27 @@ function drawPhaseTarget(ctx, pts, w, h, moveId, phase) {
   }
 
   // Count matched time for the final report (observable: visible lip envelope met the target).
-  if (State.observations && matchScore > 0.6) {
+  if (State.observations && matchScore > 0.6 && !State.phaseGate) {
     State.observations.matchedMs = (State.observations.matchedMs || 0) + 33;
   }
 
   // Outline shifts cool-dashed → warm-solid as the user matches the target.
   const warm = matchScore;
+
+  // Fill meter inside the target: grows while the gate is accumulating.
+  const gateFill = State.phaseGate?.fill || 0;
+  if (gateFill > 0.02) {
+    ctx.save();
+    const alpha = Math.min(0.55, gateFill * 0.55);
+    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(rx, ry));
+    grad.addColorStop(0, `rgba(255,210,160,${alpha})`);
+    grad.addColorStop(1, "rgba(255,160,110,0)");
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, rx * (0.75 + gateFill * 0.25), ry * (0.75 + gateFill * 0.25), 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
   const r = 255;
   const g = Math.round(210 - warm * 70);
   const b = Math.round(170 - warm * 110);
