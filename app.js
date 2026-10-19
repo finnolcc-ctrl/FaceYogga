@@ -453,6 +453,16 @@ function clearAllTimers() {
   });
 }
 
+// Stop every move-related timer so the current phase cannot bleed into
+// the next one. Called before Skip / Retry / Self-check transitions.
+function clearPhaseTimers() {
+  ["phase", "demo", "ready", "rest", "active"].forEach((k) => {
+    const t = State.timers[k];
+    if (t) { clearTimeout(t); clearInterval(t); State.timers[k] = null; }
+  });
+  State.active = null;
+}
+
 function nextMove() {
   const s = State.session;
   s.moveIndex++;
@@ -594,6 +604,10 @@ function showSelfCheck(move) {
 function handleSelfResult(status) {
   const s = State.session;
   if (!s) return;
+  // Kill any in-flight phase / demo / ready / rest timer BEFORE we transition,
+  // so a Skip during active cannot race with the natural phase advance.
+  clearPhaseTimers();
+
   const moveState = s.moves[s.moveIndex];
   document.getElementById("selfcheck").hidden = true;
 
