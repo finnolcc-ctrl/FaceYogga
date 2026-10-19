@@ -1,20 +1,22 @@
 // Test harness — drives the detection pipeline from UI sliders.
-// Builds a mock face: ~25 hand-placed landmark positions wrapped in a
-// 478-length array, applies the lip Δx/Δy sliders to the mouth landmarks,
-// and runs the real advanceGate() / drawMesh() / Stickers.update() loop.
+// Builds a mock face: hand-placed landmark positions in a 478-length array,
+// applies the lip Δx/Δy sliders to the mouth landmarks, and runs the real
+// advanceGate() / drawMesh() / Stickers.update() loop at ~60fps.
 
-// Wait until app.js has published its API on window.FaceYoga.
 await untilReady();
 const FY = window.FaceYoga;
 
 const BASE_LANDMARKS = buildBaseLandmarks();
+const fakeVideo = { videoWidth: 480, videoHeight: 640, currentTime: 0 };
 
 // --- UI wiring ---
-const slidersIds = ["sJaw", "sPuck", "sSmile", "sDx", "sDy"];
+const sliderIds = ["sJaw", "sPuck", "sSmile", "sDx", "sDy"];
 const valIds    = ["vJaw", "vPuck", "vSmile", "vDx", "vDy"];
-const sliders = Object.fromEntries(slidersIds.map((id) => [id, document.getElementById(id)]));
-const vals    = Object.fromEntries(valIds.map((id) => [id, document.getElementById(id)]));
-slidersIds.forEach((id, i) => {
+const sliders = {};
+const vals = {};
+sliderIds.forEach((id, i) => {
+  sliders[id] = document.getElementById(id);
+  vals[valIds[i]] = document.getElementById(valIds[i]);
   sliders[id].addEventListener("input", () => {
     vals[valIds[i]].textContent = (+sliders[id].value).toFixed(2);
   });
@@ -24,7 +26,7 @@ slidersIds.forEach((id, i) => {
 // --- Boot ---
 await FY.loadRoutine();
 populateMoveSelect();
-await buildMockSession();
+buildMockSession();
 startMockLoop();
 
 document.getElementById("testStart").addEventListener("click", () => {
@@ -33,48 +35,47 @@ document.getElementById("testStart").addEventListener("click", () => {
 });
 document.getElementById("testReset").addEventListener("click", () => {
   resetMoveState();
-  document.getElementById("phaseCue").textContent = "pick a move below";
+  document.getElementById("phaseCue").textContent = "Pick a move";
+  document.getElementById("phaseSub").textContent = "then press Start";
   document.getElementById("stageLabel").textContent = "Ready";
-  document.getElementById("phaseSub").textContent = "—";
-  renderRhythmDots(0, 0);
-});
-document.getElementById("testCollapse").addEventListener("click", () => {
-  document.getElementById("testPanel").classList.toggle("collapsed");
+  document.getElementById("moveIndex").textContent = "—";
+  document.getElementById("sessionProgress").style.width = "0%";
+  renderRhythmDots(0, -1);
 });
 
-// Hold / release shortcuts
-document.getElementById("testHoldL").addEventListener("click", () => {
-  setSliders({ jaw: 0.6, puck: 0, smile: 0.5, dx:  0.12, dy: 0 });
-});
-document.getElementById("testHoldR").addEventListener("click", () => {
-  setSliders({ jaw: 0, puck: 0.7, smile: 0, dx: -0.12, dy: 0 });
-});
-document.getElementById("testHoldU").addEventListener("click", () => {
-  setSliders({ jaw: 0, puck: 0.4, smile: 0, dx:  0, dy: -0.07 });
-});
-document.getElementById("testHoldD").addEventListener("click", () => {
-  setSliders({ jaw: 0, puck: 0.4, smile: 0, dx:  0, dy:  0.07 });
-});
-document.getElementById("testRelease").addEventListener("click", () => {
-  setSliders({ jaw: 0, puck: 0, smile: 0, dx: 0, dy: 0 });
-});
-document.getElementById("testForceSnap").addEventListener("click", () => {
-  if (FY.State.phaseGate) {
-    FY.State.phaseGate.fill = 1.01;
-  }
-});
 document.getElementById("testPause").addEventListener("click", () => {
   FY.State.paused = !FY.State.paused;
   document.getElementById("testPause").textContent = FY.State.paused ? "▶" : "II";
 });
 
+// Preset buttons
+document.getElementById("testHoldA").addEventListener("click", () =>
+  setSliders({ jaw: 0.6, puck: 0, smile: 0, dx: 0, dy: 0 }));
+document.getElementById("testHoldU").addEventListener("click", () =>
+  setSliders({ jaw: 0, puck: 0.7, smile: 0, dx: 0, dy: 0 }));
+document.getElementById("testHoldE").addEventListener("click", () =>
+  setSliders({ jaw: 0.05, puck: 0, smile: 0.5, dx: 0, dy: 0 }));
+document.getElementById("testPuckL").addEventListener("click", () =>
+  setSliders({ jaw: 0, puck: 0.4, smile: 0, dx:  0.12, dy: 0 }));
+document.getElementById("testPuckR").addEventListener("click", () =>
+  setSliders({ jaw: 0, puck: 0.4, smile: 0, dx: -0.12, dy: 0 }));
+document.getElementById("testPuckUp").addEventListener("click", () =>
+  setSliders({ jaw: 0, puck: 0.4, smile: 0, dx: 0, dy: -0.07 }));
+document.getElementById("testPuckDn").addEventListener("click", () =>
+  setSliders({ jaw: 0, puck: 0.4, smile: 0, dx: 0, dy: 0.07 }));
+document.getElementById("testRelease").addEventListener("click", () =>
+  setSliders({ jaw: 0, puck: 0, smile: 0, dx: 0, dy: 0 }));
+document.getElementById("testForceSnap").addEventListener("click", () => {
+  if (FY.State.phaseGate) FY.State.phaseGate.fill = 1.01;
+});
+
 function setSliders({ jaw, puck, smile, dx, dy }) {
-  sliders.sJaw.value   = jaw;
-  sliders.sPuck.value  = puck;
+  sliders.sJaw.value = jaw;
+  sliders.sPuck.value = puck;
   sliders.sSmile.value = smile;
-  sliders.sDx.value    = dx;
-  sliders.sDy.value    = dy;
-  slidersIds.forEach((id) => sliders[id].dispatchEvent(new Event("input")));
+  sliders.sDx.value = dx;
+  sliders.sDy.value = dy;
+  sliderIds.forEach((id) => sliders[id].dispatchEvent(new Event("input")));
 }
 
 function populateMoveSelect() {
@@ -82,13 +83,13 @@ function populateMoveSelect() {
   FY.State.routine.moves.forEach((m, i) => {
     const opt = document.createElement("option");
     opt.value = i;
-    opt.textContent = `${i + 1}. ${m.title.en}${FY.DETECTION_MOVES.has(m.id) ? " ★" : ""}`;
+    const star = FY.DETECTION_MOVES.has(m.id) ? " ★" : "";
+    opt.textContent = `${i + 1}. ${m.title.en}${star}`;
     sel.appendChild(opt);
   });
 }
 
-// Minimal session scaffolding so startMoveFromIndex() can mutate it.
-async function buildMockSession() {
+function buildMockSession() {
   FY.State.mode = "camera_assisted_candidate";
   FY.State.session = {
     startedAt: new Date().toISOString(),
@@ -117,14 +118,13 @@ function startMoveFromIndex(i) {
 function resetMoveState() {
   FY.State.phaseGate = null;
   FY.State.active = null;
-  // Clear any running phase timers
   ["phase", "active", "demo", "ready", "rest"].forEach((k) => {
     const t = FY.State.timers[k];
     if (t) { clearTimeout(t); clearInterval(t); FY.State.timers[k] = null; }
   });
 }
 
-// --- Mock face landmarks (normalized 0..1 within a 480x640 "video") ---
+// --- Mock face landmarks (normalized 0..1 for a 480x640 "video") ---
 function buildBaseLandmarks() {
   const positions = {
     1:   { x: 0.50, y: 0.55 },
@@ -157,27 +157,20 @@ function buildBaseLandmarks() {
 
 function buildFrameLandmarks(dx, dy) {
   const eyeDist = 0.34;
-  const shiftX = dx * eyeDist;
-  const shiftY = dy * eyeDist;
+  const sx = dx * eyeDist;
+  const sy = dy * eyeDist;
   const copy = BASE_LANDMARKS.map((p) => ({ x: p.x, y: p.y, z: p.z }));
   for (const i of [13, 14, 61, 291]) {
-    copy[i].x += shiftX;
-    copy[i].y += shiftY;
+    copy[i].x += sx;
+    copy[i].y += sy;
   }
   return [copy];
 }
 
-// --- Fake video element (drawMesh reads videoWidth / videoHeight) ---
-const fakeVideo = { videoWidth: 480, videoHeight: 640, currentTime: 0 };
-
 function startMockLoop() {
   const meshEl = document.getElementById("exerciseMesh");
-  let last = performance.now();
   const tick = () => {
     requestAnimationFrame(tick);
-    const now = performance.now();
-    const dt = now - last;
-    last = now;
 
     const jaw   = +sliders.sJaw.value;
     const puck  = +sliders.sPuck.value;
@@ -185,7 +178,6 @@ function startMockLoop() {
     const dx    = +sliders.sDx.value;
     const dy    = +sliders.sDy.value;
 
-    // Direct set (no EMA) so sliders feel responsive
     const bs = FY.State.blendshapes;
     bs.jawOpen = jaw;
     bs.mouthPucker = puck;
@@ -207,14 +199,15 @@ function startMockLoop() {
 function updateStatus() {
   const a = FY.State.active;
   const g = FY.State.phaseGate;
-  document.getElementById("statusPhase").textContent = a ? (a.phase || "—") : "—";
-  // Compute match score transparently (same logic as app.js)
-  const match = computeMatch();
-  document.getElementById("statusMatch").textContent = match.toFixed(2);
+  document.getElementById("statusPhase").textContent = a?.phase || "—";
+  document.getElementById("statusMatch").textContent = computeMatch().toFixed(2);
   const fill = g?.fill || 0;
   document.getElementById("statusFill").textContent = fill.toFixed(2);
-  document.getElementById("phaseFillSpan").style.width = Math.round(fill * 100) + "%";
+  document.getElementById("fillSpan").style.width = Math.round(fill * 100) + "%";
   document.getElementById("statusReps").textContent = g ? `${g.reps}/${g.requiredReps}` : "—";
+
+  // Keep the cue-card dots in sync (app.js renderRhythmDots targets same id)
+  if (g) renderRhythmDots(g.requiredReps, g.reps);
 }
 
 function computeMatch() {
@@ -231,8 +224,8 @@ function computeMatch() {
     case "pucker_side_to_side:left":
     case "pucker_side_to_side:right": {
       if (!pts) return 0;
-      const puck = bs.mouthPucker || 0;
-      if (puck < 0.18) return 0;
+      const puckScore = bs.mouthPucker || 0;
+      if (puckScore < 0.18) return 0;
       const d = lipDev(pts);
       const sign = a.phase === "left" ? 1 : -1;
       return Math.min(1, Math.max(0, (d.dx * sign) / 0.085));
@@ -242,8 +235,8 @@ function computeMatch() {
     case "pucker_circles:up":
     case "pucker_circles:down": {
       if (!pts) return 0;
-      const puck = bs.mouthPucker || 0;
-      if (puck < 0.18) return 0;
+      const puckScore = bs.mouthPucker || 0;
+      if (puckScore < 0.18) return 0;
       const d = lipDev(pts);
       switch (a.phase) {
         case "left":  return Math.min(1, Math.max(0,  d.dx) / 0.075);

@@ -7,189 +7,215 @@
   <title>Face Yoga — Test harness</title>
   <link rel="stylesheet" href="style.css">
   <style>
-    body { overflow: hidden; }
+    html, body { background: #07080c; height: 100%; overflow: hidden; }
+    body { font-family: -apple-system,"SF Pro Display","PingFang SC","Segoe UI",sans-serif; color: #f3eee6; }
     #aurora { display: none; }
-    #testPanel {
-      position: fixed;
-      left: 0; right: 0; bottom: 0;
-      max-height: 55vh;
-      overflow-y: auto;
-      background: rgba(10,12,20,.92);
-      border-top: 1px solid rgba(255,255,255,.12);
-      padding: 14px 16px 24px;
-      z-index: 30;
-      backdrop-filter: blur(24px);
-      -webkit-backdrop-filter: blur(24px);
-      font-size: 13px;
-      color: var(--ink);
-    }
-    #testPanel h3 {
-      font-size: 12px;
-      letter-spacing: .18em;
-      text-transform: uppercase;
-      color: var(--ink-mute);
-      margin-bottom: 10px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    #testPanel .row {
+
+    .test-root {
       display: grid;
-      grid-template-columns: 110px 1fr 52px;
-      gap: 10px;
-      align-items: center;
-      padding: 6px 0;
+      grid-template-rows: auto 1fr auto;
+      height: 100vh;
+      height: 100dvh;
+      max-width: 480px;
+      margin: 0 auto;
+      position: relative;
+      z-index: 1;
     }
-    #testPanel .row label { color: var(--ink-dim); font-size: 12px; }
-    #testPanel .row .val { text-align: right; font-variant-numeric: tabular-nums; color: var(--ink); font-size: 12px; }
-    #testPanel input[type=range] { width: 100%; accent-color: var(--accent); }
-    #testPanel .btns { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
-    #testPanel button {
-      padding: 8px 14px;
-      background: rgba(255,255,255,.08);
-      border: 1px solid rgba(255,255,255,.12);
-      border-radius: 999px;
-      color: var(--ink);
-      font-size: 12px;
-      cursor: pointer;
-    }
-    #testPanel button.primary { background: var(--accent); color: #1a1a1a; border-color: transparent; }
-    #testPanel button:active { transform: scale(.97); }
-    #testPanel select {
-      flex: 1;
-      padding: 8px 10px;
-      background: rgba(255,255,255,.08);
-      border: 1px solid rgba(255,255,255,.12);
-      border-radius: 10px;
-      color: var(--ink);
-      font: inherit;
-    }
-    #testPanel .status {
+
+    .test-top {
+      padding: 14px 18px 10px;
       display: grid;
-      grid-template-columns: 1fr 1fr 1fr 1fr;
-      gap: 10px;
-      padding: 10px 0 4px;
-      font-size: 11px;
-      color: var(--ink-mute);
+      grid-template-columns: 36px 1fr 36px;
+      gap: 12px;
+      align-items: center;
+      border-bottom: 1px solid rgba(255,255,255,.08);
     }
-    #testPanel .status strong {
-      display: block;
-      font-size: 18px;
-      color: var(--ink);
-      font-weight: 400;
-      font-variant-numeric: tabular-nums;
-      padding-top: 2px;
-    }
-    #testPanel .collapse {
-      background: rgba(255,255,255,.08);
-      border: 0;
-      color: var(--ink);
-      width: 28px; height: 28px;
+    .test-top button {
+      width: 36px; height: 36px;
       border-radius: 50%;
+      background: rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.1);
+      color: #f3eee6;
+      font-size: 15px;
       cursor: pointer;
     }
-    .screen-exercise { background: #0b1018 !important; }
-    #exerciseVideo { display: none; }
-    #testFace {
-      position: absolute;
-      inset: 0;
-      z-index: 0;
-      opacity: .25;
-      pointer-events: none;
+    .test-top .progress {
+      display: flex; flex-direction: column; gap: 6px; align-items: center;
     }
-    #testPanel.collapsed .panel-body { display: none; }
-    #testPanel.collapsed { max-height: 48px; }
-    #phaseFillBar {
-      height: 4px;
-      background: rgba(255,255,255,.1);
-      border-radius: 2px;
+    .test-top .progress .eyebrow {
+      font-size: 11px; letter-spacing: .18em; text-transform: uppercase;
+      color: rgba(243,238,230,.55);
+    }
+    .test-top .progress .bar {
+      width: 100%; height: 3px; background: rgba(255,255,255,.1); border-radius: 2px; overflow: hidden;
+    }
+    .test-top .progress .bar > span {
+      display: block; height: 100%; background: linear-gradient(90deg,#ffb48c,#ff6a7d); width: 0%; transition: width .3s ease;
+    }
+
+    .stage {
+      position: relative;
       overflow: hidden;
-      margin: 2px 0;
+      background:
+        radial-gradient(ellipse at 50% 42%, rgba(60,70,90,.4) 0%, transparent 60%),
+        #0b1018;
     }
-    #phaseFillBar > span {
-      display: block;
-      height: 100%;
-      background: linear-gradient(90deg, #ffcf8a, #ff8a9a);
-      width: 0%;
-      transition: width .08s linear;
+    .stage canvas, .stage .sticker-layer {
+      position: absolute; inset: 0; width: 100%; height: 100%;
     }
+    .stage canvas { transform: scaleX(-1); }
+    .stage .sticker-layer img { position: absolute; top: 0; left: 0; }
+
+    .cue-card {
+      position: absolute;
+      bottom: 20px; left: 50%;
+      transform: translateX(-50%);
+      background: rgba(10,12,20,.65);
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 20px;
+      padding: 12px 18px;
+      min-width: 240px;
+      text-align: center;
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      z-index: 5;
+    }
+    .cue-card .pill {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.1);
+      font-size: 11px; letter-spacing: .1em; text-transform: uppercase;
+      color: rgba(243,238,230,.75);
+      margin-bottom: 8px;
+    }
+    .cue-card h2 { font-size: 18px; font-weight: 300; line-height: 1.25; color: #fff; }
+    .cue-card p { font-size: 12px; color: rgba(243,238,230,.6); margin-top: 4px; }
+    .cue-card .dots { display: flex; gap: 8px; justify-content: center; margin-top: 10px; }
+    .cue-card .dots .r {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: rgba(255,255,255,.2);
+      transition: background .3s ease, transform .3s ease;
+    }
+    .cue-card .dots .r.on {
+      background: #ead1b5; transform: scale(1.4);
+      box-shadow: 0 0 10px rgba(234,209,181,.7);
+    }
+    .cue-card .dots .r.done {
+      background: linear-gradient(135deg,#ffcf8a,#ff8a9a);
+      transform: scale(1.25);
+    }
+
+    .panel {
+      padding: 12px 16px calc(env(safe-area-inset-bottom,0) + 16px);
+      background: rgba(10,12,20,.95);
+      border-top: 1px solid rgba(255,255,255,.1);
+      max-height: 50vh;
+      overflow-y: auto;
+      font-size: 13px;
+    }
+    .panel h3 {
+      font-size: 11px; letter-spacing: .18em; text-transform: uppercase;
+      color: rgba(243,238,230,.55); margin-bottom: 10px;
+    }
+    .panel .row {
+      display: grid;
+      grid-template-columns: 110px 1fr 48px;
+      gap: 10px; align-items: center; padding: 4px 0;
+    }
+    .panel label { color: rgba(243,238,230,.7); font-size: 12px; }
+    .panel .val { text-align: right; font-size: 12px; font-variant-numeric: tabular-nums; }
+    .panel input[type=range] { width: 100%; accent-color: #ead1b5; }
+    .panel select, .panel button {
+      background: rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.12);
+      color: #f3eee6;
+      border-radius: 10px;
+      padding: 8px 12px;
+      font: inherit;
+      cursor: pointer;
+    }
+    .panel button.primary {
+      background: #ead1b5; color: #1a1a1a; border-color: transparent;
+    }
+    .panel .move-row {
+      display: grid; grid-template-columns: 1fr auto; gap: 10px; margin-bottom: 10px;
+    }
+    .panel .btns { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+    .panel .btns button { padding: 6px 11px; border-radius: 999px; font-size: 12px; }
+    .panel .status {
+      display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 10px;
+      padding: 8px 0; font-size: 11px; color: rgba(243,238,230,.5);
+    }
+    .panel .status strong {
+      display: block; font-size: 16px; color: #f3eee6; font-weight: 400;
+      font-variant-numeric: tabular-nums; padding-top: 2px;
+    }
+    #fillBar {
+      height: 4px; background: rgba(255,255,255,.1);
+      border-radius: 2px; overflow: hidden; margin: 2px 0 8px;
+    }
+    #fillBar > span {
+      display: block; height: 100%;
+      background: linear-gradient(90deg,#ffcf8a,#ff8a9a);
+      width: 0%; transition: width .08s linear;
+    }
+    .completion-flash { position: fixed !important; }
   </style>
 </head>
 <body>
 
-<main id="app">
-  <!-- Only the exercise screen exists in test mode -->
-  <section class="screen screen-exercise in-camera-mode" data-screen="exercise">
-    <video id="exerciseVideo" playsinline autoplay muted></video>
-    <svg id="testFace" viewBox="0 0 100 140" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
-      <ellipse cx="50" cy="60" rx="28" ry="38" fill="#223" stroke="#334" stroke-width=".4"/>
-    </svg>
-    <canvas id="exerciseMesh" class="mesh-canvas mesh-canvas-soft on"></canvas>
+<div class="test-root">
+  <header class="test-top">
+    <button id="testPause" aria-label="pause">II</button>
+    <div class="progress">
+      <span class="eyebrow"><span id="moveIndex">—</span> / 7 · test</span>
+      <div class="bar"><span id="sessionProgress"></span></div>
+    </div>
+    <button id="testReset" aria-label="reset">↺</button>
+  </header>
+
+  <section class="stage" id="stage">
+    <canvas id="exerciseMesh"></canvas>
     <div class="sticker-layer on" id="exerciseStickers" aria-hidden="true"></div>
-    <div class="exercise-dim" aria-hidden="true"></div>
-
-    <header class="topbar topbar-exercise">
-      <button class="icon-btn glass-chip" id="testPause">II</button>
-      <div class="session-progress">
-        <span class="eyebrow"><span id="moveIndex">1</span> / 7</span>
-        <div class="progress-track"><div class="progress-fill" id="sessionProgress"></div></div>
-      </div>
-      <button class="icon-btn glass-chip" id="testReset">↺</button>
-    </header>
-
-    <div class="exercise-body">
-      <div class="phase-stage" id="phaseStage" style="display:none">
-        <div class="phase-track" id="phaseTrack"></div>
-        <div class="phase-visual" id="phaseVisual">
-          <div class="phase-glow" id="phaseGlow"></div>
-          <span class="phase-letter" id="phaseLetter"></span>
-          <div class="phase-dot" id="phaseDot"></div>
-        </div>
-        <div class="phase-ring" id="phaseRing"></div>
-      </div>
-      <div class="phase-copy">
-        <span class="pill" id="stageLabel">Ready</span>
-        <h2 class="phase-cue" id="phaseCue">pick a move below</h2>
-        <p class="phase-sub" id="phaseSub">—</p>
-      </div>
-      <div class="rhythm-dots" id="rhythmDots"></div>
+    <!-- Hidden video so drawMesh's signature matches; sized via test.js -->
+    <video id="exerciseVideo" style="display:none" playsinline muted></video>
+    <div class="cue-card">
+      <span class="pill" id="stageLabel">Ready</span>
+      <h2 id="phaseCue">Pick a move</h2>
+      <p id="phaseSub">then press Start</p>
+      <div class="dots" id="rhythmDots"></div>
     </div>
   </section>
-</main>
 
-<aside id="testPanel">
-  <h3>
-    <span>Test harness · face-free</span>
-    <button class="collapse" id="testCollapse" aria-label="collapse">—</button>
-  </h3>
+  <aside class="panel">
+    <h3>Test harness · face-free</h3>
 
-  <div class="panel-body">
-    <div class="row" style="grid-template-columns: 90px 1fr auto">
-      <label>Move</label>
+    <div class="move-row">
       <select id="testMove"></select>
-      <button class="primary" id="testStart">Start</button>
+      <button id="testStart" class="primary">Start</button>
     </div>
 
     <div class="status">
       <div>Phase<strong id="statusPhase">—</strong></div>
       <div>Match<strong id="statusMatch">0</strong></div>
       <div>Fill<strong id="statusFill">0</strong></div>
-      <div>Reps<strong id="statusReps">0</strong></div>
+      <div>Reps<strong id="statusReps">—</strong></div>
     </div>
-    <div id="phaseFillBar"><span id="phaseFillSpan"></span></div>
+    <div id="fillBar"><span id="fillSpan"></span></div>
 
     <div class="row">
-      <label>jawOpen (A)</label>
+      <label>jawOpen</label>
       <input type="range" id="sJaw" min="0" max="1" step="0.01" value="0">
       <span class="val" id="vJaw">0.00</span>
     </div>
     <div class="row">
-      <label>mouthPucker (U)</label>
+      <label>mouthPucker</label>
       <input type="range" id="sPuck" min="0" max="1" step="0.01" value="0">
       <span class="val" id="vPuck">0.00</span>
     </div>
     <div class="row">
-      <label>mouthSmile (E)</label>
+      <label>mouthSmile</label>
       <input type="range" id="sSmile" min="0" max="1" step="0.01" value="0">
       <span class="val" id="vSmile">0.00</span>
     </div>
@@ -205,15 +231,18 @@
     </div>
 
     <div class="btns">
-      <button id="testHoldL">Hold ← (A/E/left)</button>
-      <button id="testHoldR">Hold → (U/right)</button>
-      <button id="testHoldU">Hold ↑ up</button>
-      <button id="testHoldD">Hold ↓ down</button>
+      <button id="testHoldA">A: open jaw</button>
+      <button id="testHoldU">U: round lips</button>
+      <button id="testHoldE">E: wide smile</button>
+      <button id="testPuckL">Pucker ←</button>
+      <button id="testPuckR">Pucker →</button>
+      <button id="testPuckUp">Pucker ↑</button>
+      <button id="testPuckDn">Pucker ↓</button>
       <button id="testRelease">Release</button>
       <button id="testForceSnap">Force snap</button>
     </div>
-  </div>
-</aside>
+  </aside>
+</div>
 
 <script>window.__faceYogaTest = true;</script>
 <script type="module" src="app.js"></script>
