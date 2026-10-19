@@ -123,7 +123,13 @@ const State = {
 };
 
 // -------- Boot --------
-init().catch((e) => showDiag("init error: " + (e?.message || e)));
+const IS_TEST = typeof location !== "undefined"
+  && (new URLSearchParams(location.search).get("test") === "1"
+      || /\/test\.html?$/.test(location.pathname)
+      || window.__faceYogaTest === true);
+if (!IS_TEST) {
+  init().catch((e) => showDiag("init error: " + (e?.message || e)));
+}
 
 async function init() {
   const res = await fetch("routine.v2.json");
@@ -1449,6 +1455,35 @@ function reflectionFor(session, data) {
   }
   return "Softer today. Tomorrow is a new one.";
 }
+
+// Expose the pieces the test harness needs to drive the pipeline
+// without a camera. Only ever imported by test.html / test.js.
+window.FaceYoga = {
+  State,
+  DETECTION_MOVES,
+  DETECTION_REPS,
+  Stickers,
+  StickerLayer,
+  show,
+  startSession,
+  runActive,
+  runActiveDetection,
+  runActivePaced,
+  advanceGate,
+  snapRep,
+  stepGatedPhase,
+  drawMesh,
+  autoAdvance,
+  flashSnap,
+  nextMove,
+  teardownExercise,
+  bindActions,
+  async loadRoutine() {
+    const res = await fetch("routine.v2.json");
+    State.routine = await res.json();
+    return State.routine;
+  },
+};
 
 // Signal readiness for diagnostics
 window.__appReady = true;
