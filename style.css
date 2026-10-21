@@ -463,7 +463,7 @@ ul, ol { list-style: none; }
 }
 /* Minimal cue card at the bottom only */
 .screen-exercise.in-camera-mode .phase-copy {
-  background: rgba(10,12,18,.6);
+  background: rgba(10,12,18,.82);
   padding: 12px 20px;
   border-radius: 20px;
   border: 1px solid rgba(255,255,255,.1);
@@ -473,10 +473,12 @@ ul, ol { list-style: none; }
 }
 .screen-exercise.in-camera-mode .phase-copy .pill { background: rgba(255,255,255,.1); }
 .screen-exercise.in-camera-mode .phase-cue {
-  font-size: 20px;
+  font-size: 22px;
   letter-spacing: .005em;
 }
-.screen-exercise.in-camera-mode .phase-sub { font-size: 12px; }
+/* The live hint moves to the pill by the mouth (#hintPill). */
+.screen-exercise.in-camera-mode .phase-sub { display: none; }
+.screen-exercise.in-camera-mode:not(.bloom-off) .rhythm-dots { display: none; }
 /* Only a very subtle darken at the very bottom for the controls */
 .screen-exercise.in-camera-mode .exercise-dim {
   background: linear-gradient(180deg, transparent 0%, transparent 75%, rgba(0,0,0,.55) 98%);
@@ -1126,3 +1128,131 @@ ul, ol { list-style: none; }
   .phase-glow { width: 150px; height: 150px; }
   .phase-letter { font-size: 60px; }
 }
+
+/* =========================================================
+   Bloom — hint pill, bud layer, garden, mini mandala
+   ========================================================= */
+#bloomLayer { z-index: 3; }
+.bloom-layer.on { opacity: 1; }
+
+.hint-pill {
+  position: absolute;
+  left: 0; top: 0;
+  z-index: 4;
+  transform: translate(-50%, 0);
+  padding: 8px 16px;
+  border-radius: var(--radius-pill);
+  background: rgba(243,238,230,.94);
+  color: #07080c;
+  font-family: "Outfit", var(--font);
+  font-weight: 500;
+  font-size: 18px;
+  line-height: 1.2;
+  letter-spacing: 0;
+  white-space: nowrap;
+  box-shadow: 0 6px 24px -6px rgba(0,0,0,.55);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .18s ease;
+  will-change: left, top;
+}
+.hint-pill.show { opacity: 1; }
+.hint-pill.swap { opacity: 0; transition-duration: .09s; }
+
+/* Garden row: one slot per rep, or one stem for paced moves */
+.bloom-garden {
+  display: none;
+  gap: 10px;
+  justify-content: center;
+  align-items: flex-end;
+  min-height: 30px;
+  position: relative;
+}
+.bloom-garden.on { display: flex; }
+.bloom-garden .slot {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,.28);
+  position: relative;
+  transition: transform .6s cubic-bezier(.3,0,.2,1), opacity .6s ease, border-color .3s ease;
+}
+.bloom-garden .slot.current {
+  border-color: rgba(234,209,181,.85);
+  animation: slotBreath 1.8s ease-in-out infinite;
+}
+@keyframes slotBreath {
+  0%, 100% { box-shadow: 0 0 0 rgba(234,209,181,0); }
+  50%      { box-shadow: 0 0 12px rgba(234,209,181,.55); }
+}
+.bloom-garden .slot.filled { border-color: transparent; animation: slotLand .5s cubic-bezier(.3,0,.2,1) both; }
+.bloom-garden .slot.filled::before {
+  content: "";
+  position: absolute; inset: 2px;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+}
+.bloom-garden .slot.filled.p0::before { background: rgba(255,255,255,.35); inset: 7px; border-radius: 50%; }
+.bloom-garden .slot.filled.p1::before { background: #ead1b5; }
+.bloom-garden .slot.filled.p2::before { background: linear-gradient(135deg, #ff6a7d, #ff8ac6); box-shadow: 0 0 10px rgba(255,138,198,.5); }
+.bloom-garden .slot.filled.p3::before { background: linear-gradient(135deg, #fff2d3, #ff7cb9 55%, #9668ff); box-shadow: 0 0 14px rgba(255,124,185,.7), 0 0 28px rgba(150,104,255,.35); }
+@keyframes slotLand {
+  0%   { transform: scale(.6); }
+  60%  { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+.bloom-garden.gather .slot { opacity: 0; }
+
+/* Paced moves: a stem that grows with the clock */
+.bloom-garden .stem {
+  width: 2px;
+  height: 30px;
+  background: rgba(234,209,181,.25);
+  border-radius: 2px;
+  position: relative;
+  transition: opacity .6s ease;
+}
+.bloom-garden .stem::after {
+  content: "";
+  position: absolute; left: 0; right: 0; bottom: 0;
+  height: calc(var(--grow, 0) * 100%);
+  background: linear-gradient(0deg, #5dcaa5, #ead1b5);
+  border-radius: 2px;
+  transition: height .3s linear;
+}
+.bloom-garden .stem.fade { opacity: 0; }
+
+/* The blossom a finished move becomes, before it flies to the mini mandala */
+.bloom-garden .blossom {
+  position: absolute;
+  left: 50%; bottom: 4px;
+  width: 26px; height: 26px;
+  margin-left: -13px;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg) scale(0);
+  animation: blossomOpen .6s cubic-bezier(.3,0,.2,1) forwards;
+  box-shadow: 0 0 18px rgba(255,180,200,.55);
+}
+.bloom-garden .blossom.small { width: 16px; height: 16px; margin-left: -8px; }
+@keyframes blossomOpen {
+  to { transform: rotate(-45deg) scale(1); }
+}
+
+/* Mini mandala: 7 petal slots that fill as moves finish */
+.mini-mandala {
+  position: relative;
+  width: 32px; height: 32px;
+}
+.mini-mandala .mp {
+  position: absolute;
+  left: 13px; top: 2px;
+  width: 6px; height: 14px;
+  border-radius: 50% 50% 40% 40%;
+  transform-origin: 3px 14px;
+  transform: rotate(var(--rot, 0deg));
+  background: rgba(255,255,255,.12);
+  transition: opacity .5s ease, filter .5s ease, background .5s ease;
+}
+.mini-mandala .mp.q0 { opacity: .55; filter: saturate(.6); }
+.mini-mandala .mp.q1 { opacity: .75; filter: saturate(.85); }
+.mini-mandala .mp.q2 { opacity: .9; }
+.mini-mandala .mp.q3 { opacity: 1; filter: saturate(1.2) drop-shadow(0 0 4px rgba(255,160,220,.8)); }

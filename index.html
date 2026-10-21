@@ -456,6 +456,7 @@
   <section class="screen screen-exercise" data-screen="exercise" hidden>
     <video id="exerciseVideo" playsinline autoplay muted></video>
     <canvas id="exerciseMesh" class="mesh-canvas mesh-canvas-soft"></canvas>
+    <canvas id="bloomLayer" class="mesh-canvas bloom-layer" aria-hidden="true"></canvas>
     <div class="sticker-layer" id="exerciseStickers" aria-hidden="true"></div>
     <div class="exercise-dim" aria-hidden="true"></div>
 
@@ -464,6 +465,7 @@
       <div class="session-progress">
         <span class="eyebrow"><span id="moveIndex">1</span> / 7</span>
         <div class="progress-track"><div class="progress-fill" id="sessionProgress"></div></div>
+        <div class="mini-mandala" id="miniMandala" aria-hidden="true"><span class="mp" style="--rot:0deg"></span><span class="mp" style="--rot:51.4deg"></span><span class="mp" style="--rot:102.8deg"></span><span class="mp" style="--rot:154.2deg"></span><span class="mp" style="--rot:205.7deg"></span><span class="mp" style="--rot:257.1deg"></span><span class="mp" style="--rot:308.5deg"></span></div>
       </div>
       <button class="icon-btn glass-chip" data-action="endSession" aria-label="End">×</button>
     </header>
@@ -486,7 +488,10 @@
       </div>
 
       <div class="rhythm-dots" id="rhythmDots"></div>
+      <div class="bloom-garden" id="bloomGarden" aria-hidden="true"></div>
     </div>
+
+    <div class="hint-pill" id="hintPill" aria-live="polite" hidden></div>
 
     <footer class="exercise-footer">
       <button class="btn btn-ghost small" data-action="replayDemo">Replay demo</button>
