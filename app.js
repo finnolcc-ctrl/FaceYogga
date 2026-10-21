@@ -13,26 +13,40 @@ const MP_VERSION = "1.1.0";
 const MODEL_URL  = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
 
 // =====================================================
-// FACE MESH OVERLAY
-// Dots + lines that follow the user's face in real time.
-// Sticker slots take image URLs — drop files into
-// /stickers/ and update STICKER_SLOTS[x].imageUrl.
+// FACE FILTER OVERLAY — Snapchat-style
+// Draws coloured muscle zones over the face. The real
+// face underneath is darkened by a semi-opaque base so
+// the user sees a stylised muscle map, not themselves.
 // =====================================================
-const MESH_POINTS = [
-  10, 103, 332, 70, 300, 55, 285,
-  33, 263, 133, 362,
-  1, 234, 454,
-  61, 291, 148, 377, 152,
+const SHOW_STICKERS = false;   // sticker overlay disabled per user request 2026-10-21
+
+const FACE_OVAL = [
+  10, 338, 297, 332, 284, 251, 389, 356, 454, 323,
+  361, 288, 397, 365, 379, 378, 400, 377, 152, 148,
+  176, 149, 150, 136, 172, 58, 132, 93, 234, 127,
+  162, 21, 54, 103, 67, 109,
 ];
-const MESH_CONNECTIONS = [
-  [10,103],[10,332],[103,332],[103,70],[332,300],
-  [70,55],[55,285],[285,300],
-  [70,33],[300,263],[55,133],[285,362],
-  [33,1],[263,1],[133,1],[362,1],
-  [1,234],[1,454],[234,33],[454,263],
-  [234,61],[454,291],[1,61],[1,291],
-  [61,148],[291,377],[148,377],[148,152],[377,152],
+
+// Each zone = a muscle group polygon + its colour. Rendered as a soft
+// radial gradient clipped to the polygon so the colour fades at edges
+// and neighbouring zones blend naturally.
+const FACE_ZONES = [
+  { name: "forehead",   lms: [10,109,67,103,54,68,71,139,21,162,54,104,69,108,151,337,299,333,298,301,368,389,251,284,332,297,338], color: "#88a5ff", alpha: 0.32 },
+  { name: "leftBrow",   lms: [46,53,52,65,55,107,66,105,63,70], color: "#ff80c6", alpha: 0.5 },
+  { name: "rightBrow",  lms: [276,283,282,295,285,336,296,334,293,300], color: "#ff80c6", alpha: 0.5 },
+  { name: "leftEye",    lms: [33,246,161,160,159,158,157,173,133,155,154,153,145,144,163,7], color: "#c0a2ff", alpha: 0.5 },
+  { name: "rightEye",   lms: [362,398,384,385,386,387,388,466,263,249,390,373,374,380,381,382], color: "#c0a2ff", alpha: 0.5 },
+  { name: "nose",       lms: [168,193,245,122,196,174,198,236,219,48,115,220,45,4,275,440,344,278,456,420,399,351,417,6], color: "#ffcf8c", alpha: 0.38 },
+  { name: "leftCheek",  lms: [234,227,116,143,35,228,229,230,231,232,233,128,121,142,36,205,187,207,213,147,123,117,118,101], color: "#ff8d7a", alpha: 0.42 },
+  { name: "rightCheek", lms: [454,447,345,372,265,448,449,450,451,452,453,357,350,371,266,425,411,427,433,376,352,346,347,330], color: "#ff8d7a", alpha: 0.42 },
+  { name: "mouth",      lms: [61,185,40,39,37,0,267,269,270,409,291,375,321,405,314,17,84,181,91,146], color: "#ff6a8a", alpha: 0.55 },
+  { name: "chin",       lms: [152,148,176,149,150,169,170,171,175,199,208,428,262,418,377,400,378,379,365,397], color: "#9edfc9", alpha: 0.38 },
 ];
+
+function hexRgb(h) {
+  const x = h.replace("#", "");
+  return [parseInt(x.slice(0,2),16), parseInt(x.slice(2,4),16), parseInt(x.slice(4,6),16)];
+}
 const STICKER_SLOTS = {
   brow_green_l:  { anchor: 55,  size: 18, offset: [0, 0],  imageUrl: "stickers/brow.svg"   },
   brow_green_r:  { anchor: 285, size: 18, offset: [0, 0],  imageUrl: "stickers/brow.svg"   },
@@ -57,7 +71,7 @@ class StickerLayer {
     this.built = false;
   }
   ensureBuilt() {
-    if (this.built || !this.container) return;
+    if (this.built || !this.container || !SHOW_STICKERS) return;
     for (const key in STICKER_SLOTS) {
       const slot = STICKER_SLOTS[key];
       if (!slot.imageUrl) continue;
@@ -71,6 +85,10 @@ class StickerLayer {
   }
   update(landmarks, canvas) {
     if (!this.container) return;
+    if (!SHOW_STICKERS) {
+      this.container.classList.remove("on");
+      return;
+    }
     if (!landmarks?.length || !canvas) {
       this.container.classList.remove("on");
       return;
@@ -1389,34 +1407,78 @@ function drawMesh(canvas, video, landmarks) {
   if (!landmarks || !landmarks.length) return;
   const pts = landmarks[0];
 
-  ctx.strokeStyle = "rgba(255,255,255,0.55)";
-  ctx.lineWidth = Math.max(1, w / 640);
-  ctx.lineCap = "round";
-  ctx.beginPath();
-  for (const [a, b] of MESH_CONNECTIONS) {
-    const pa = pts[a], pb = pts[b];
-    if (!pa || !pb) continue;
-    ctx.moveTo(pa.x * w, pa.y * h);
-    ctx.lineTo(pb.x * w, pb.y * h);
-  }
-  ctx.stroke();
-
-  ctx.fillStyle = "#fff";
-  const r = Math.max(2.5, w / 240);
-  for (const idx of MESH_POINTS) {
-    if (STICKER_ANCHORS.has(idx)) continue;    // the sticker is the dot here
-    const p = pts[idx];
-    if (!p) continue;
-    ctx.beginPath();
-    ctx.arc(p.x * w, p.y * h, r, 0, Math.PI * 2);
+  // 1. Dark semi-opaque fill clipped to the face oval.
+  //    This hides the real face underneath while leaving the surrounding
+  //    camera backdrop visible, so the user sees a stylised muscle map.
+  const ovalPts = tracePolygon(ctx, pts, FACE_OVAL, w, h);
+  if (ovalPts.length >= 3) {
+    ctx.save();
+    ctx.fillStyle = "rgba(14,16,24,0.78)";
     ctx.fill();
+    ctx.restore();
   }
 
-  // Dotted target shape for vowel phases — the user matches their lips to this outline.
+  // 2. Each muscle zone as a soft colour wash, clipped to its polygon.
+  for (const zone of FACE_ZONES) drawFaceZone(ctx, pts, w, h, zone);
+
+  // 3. Thin outline along the face oval so the silhouette reads.
+  if (ovalPts.length >= 3) {
+    ctx.save();
+    tracePolygon(ctx, pts, FACE_OVAL, w, h);
+    ctx.strokeStyle = "rgba(255,255,255,0.12)";
+    ctx.lineWidth = Math.max(0.6, w / 900);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // 4. Dotted target shape for vowel phases — exercise overlays sit on top.
   if (State.active) {
     drawPhaseTarget(ctx, pts, w, h, State.active.moveId, State.active.phase);
     drawPuckerGuide(ctx, pts, w, h, State.active.moveId, State.active.phase);
   }
+}
+
+// Trace a polygon from an index list onto the current path; also returns
+// the collected pixel points so callers don't have to recompute them.
+function tracePolygon(ctx, pts, indices, w, h) {
+  const out = [];
+  ctx.beginPath();
+  for (let i = 0; i < indices.length; i++) {
+    const p = pts[indices[i]];
+    if (!p) continue;
+    const x = p.x * w, y = p.y * h;
+    out.push([x, y]);
+    if (out.length === 1) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  return out;
+}
+
+function drawFaceZone(ctx, pts, w, h, zone) {
+  const poly = tracePolygon(ctx, pts, zone.lms, w, h);
+  if (poly.length < 3) return;
+
+  // centroid + max radius for the gradient
+  let cx = 0, cy = 0;
+  for (const [x, y] of poly) { cx += x; cy += y; }
+  cx /= poly.length; cy /= poly.length;
+  let maxR = 0;
+  for (const [x, y] of poly) {
+    const d = Math.hypot(x - cx, y - cy);
+    if (d > maxR) maxR = d;
+  }
+  if (maxR < 1) return;
+
+  const [r, g, b] = hexRgb(zone.color);
+  const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, maxR * 1.35);
+  grad.addColorStop(0,   `rgba(${r},${g},${b},${zone.alpha})`);
+  grad.addColorStop(0.7, `rgba(${r},${g},${b},${zone.alpha * 0.55})`);
+  grad.addColorStop(1,   `rgba(${r},${g},${b},0)`);
+  ctx.save();
+  ctx.fillStyle = grad;
+  ctx.fill();
+  ctx.restore();
 }
 
 function drawPuckerGuide(ctx, pts, w, h, moveId, phase) {
