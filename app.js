@@ -719,6 +719,7 @@ function teardownExercise() {
   Bloom.reset();
   State.session = null;
   State.active = null;
+  State.phaseGate = null;
   State.paused = false;
   document.getElementById("pauseOverlay").hidden = true;
   document.getElementById("selfcheck").hidden = true;
@@ -1270,6 +1271,7 @@ const Bloom = {
   bursts: [],
   hidden: false,
   lastDraw: 0,
+  pausedAt: null,
   pill: { x: null, y: null, text: "", visible: false, swapTimer: null },
 
   init() {
@@ -1338,7 +1340,17 @@ const Bloom = {
     const tier = mandalaTier(moveState);
     const garden = el.garden?.classList.contains("on") ? el.garden : null;
     const stem = garden?.querySelector(".stem");
-    if (!tier) { stem?.classList.add("fade"); return; }
+    if (!tier) {
+      // Skipped (possibly after it was already completed): take the reward back.
+      clearTimeout(this.completionTimer);
+      this.pendingPetal = null;
+      this.bursts = [];
+      garden?.querySelector(".blossom")?.remove();
+      garden?.classList.remove("gather");
+      stem?.classList.add("fade");
+      this.clearMandala(moveIndex);
+      return;
+    }
     if (!garden) { this.fillMandala(moveIndex, tier); return; }
 
     this.pendingPetal = { moveIndex, tier };
@@ -1380,6 +1392,13 @@ const Bloom = {
     if (p) this.fillMandala(p.moveIndex, p.tier);
   },
 
+  clearMandala(moveIndex) {
+    const mp = this.el?.mandala?.children[moveIndex];
+    if (!mp) return;
+    mp.className = "mp";
+    mp.style.background = "";
+  },
+
   fillMandala(moveIndex, tier) {
     const mp = this.el?.mandala?.children[moveIndex];
     if (!mp) return;
@@ -1394,6 +1413,7 @@ const Bloom = {
     this.finishPetal();
     this.bud = null;
     this.bursts = [];
+    this.pausedAt = null;
     if (el.garden) {
       el.garden.innerHTML = "";
       el.garden.classList.remove("on", "gather");
@@ -1545,9 +1565,17 @@ const Bloom = {
 
   // Open (0–0.8 s) → drift to the garden slot (0.8–1.4 s) → land.
   drawBursts(ctx, w, h, dt, now) {
+    // Freeze on the wall clock: frames may stop entirely while paused
+    // (backgrounded tab), so shift start times by the real pause length.
+    if (State.paused) {
+      if (this.pausedAt === null) this.pausedAt = now;
+    } else if (this.pausedAt !== null) {
+      for (const b of this.bursts) b.t0 += now - this.pausedAt;
+      this.pausedAt = null;
+    }
+    const clock = this.pausedAt ?? now;
     for (const b of this.bursts) {
-      if (State.paused) { b.t0 += dt * 1000; continue; }   // freeze, resume without a jump
-      const t = (now - b.t0) / 1000;
+      const t = (clock - b.t0) / 1000;
       if (t < 0.8) {
         const e = easeOutCubic(t / 0.8);
         const glow = 0.45 * Math.sin(Math.PI * Math.min(1, t / 0.6));
@@ -1642,7 +1670,7 @@ const Bloom = {
   // stretched, mirrored canvas into screen pixels, smoothed and clamped.
   placePill(pts, w, h, dt, canvas) {
     const el = this.el;
-    const live = pts && State.phaseGate && !this.hidden && !State.paused;
+    const live = pts && State.phaseGate && State.active && !this.hidden && !State.paused;
     if (!el.pill || !live || !pts[14] || !pts[152]) { this.setPillVisible(false); return; }
 
     const ax = (pts[14].x + pts[152].x) / 2 * w;

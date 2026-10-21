@@ -62,6 +62,72 @@ export function cameraMove(idx, shiftY = 0) {
   FY.runActive(FY.State.routine.moves[idx]);
 }
 
+// index.html only: lifecycle checks for the Bloom timers and pill gating.
+//   (await import('/checks/bloom-checks.js')).lifecycle()
+export async function lifecycle() {
+  const FY = window.FaceYoga;
+  const B = FY.Bloom;
+  const rows = [];
+  const check = (name, pass, detail = "") => rows.push({ name, pass: !!pass, detail: String(detail) });
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const mp = (i) => document.querySelectorAll("#miniMandala .mp")[i].className;
+  const pill = document.getElementById("hintPill");
+
+  // Skip after Completed (during the rest): no petal, no blossom, no blooms.
+  cameraMove(2, -0.25);
+  for (let i = 0; i < 3; i++) frame({ jaw: 0.35 });
+  B.burst(3, 0);
+  B.completeMove(2, { status: "completed", quality: 12 });
+  B.completeMove(2, { status: "skipped" });
+  check("skip cancels in-flight blooms", B.bursts.length === 0, B.bursts.length);
+  await sleep(3000);                    // longer than the whole bloom → fly chain
+  check("skip after completed: no mini-mandala petal", mp(2) === "mp", mp(2));
+  check("skip after completed: no blossom", !document.querySelector("#bloomGarden .blossom"));
+
+  // Skip after the petal already landed: the petal is taken back.
+  B.startPaced(5, 20000);
+  B.completeMove(5, { status: "completed" });
+  await sleep(1400);
+  const landed = mp(5);
+  B.completeMove(5, { status: "skipped" });
+  check("skip after landing removes petal", landed.includes("q2") && mp(5) === "mp", landed + " → " + mp(5));
+
+  // Stale gate from an ended session: pill stays hidden until a phase starts.
+  FY.teardownExercise();
+  FY.State.phaseGate = { fill: 0, reps: 0, petals: [] };
+  FY.startSession("guided");
+  document.querySelector("[data-screen='exercise']").classList.add("in-camera-mode");
+  frame({ jaw: 0.2 }); frame({ jaw: 0.2 });
+  check("no pill without an active phase", !pill.classList.contains("show"), pill.className);
+  FY.teardownExercise();
+
+  // Pause: a burst stays drawn, and a stalled pause (no frames) does not jump it.
+  cameraMove(2, -0.25);
+  frame({ jaw: 0.35 });
+  B.burst(3, 0);
+  const b = B.bursts[0];
+  await sleep(300); frame({});
+  const tBefore = (performance.now() - b.t0) / 1000;
+  FY.State.paused = true;
+  frame({});
+  const layer = document.getElementById("bloomLayer");
+  // Burst centre pixel (the bud's strokes sit on the target outline, not here).
+  const dpr = layer.width / 480;
+  const lit = layer.getContext("2d").getImageData(Math.round(b.x * dpr), Math.round(b.y * dpr), 1, 1).data[3];
+  check("paused burst is still drawn", lit > 0, lit);
+  await sleep(700);                     // no frames: like a backgrounded tab
+  FY.State.paused = false;
+  frame({});
+  const tAfter = (performance.now() - b.t0) / 1000;
+  check("stalled pause does not jump the burst", Math.abs(tAfter - tBefore) < 0.15,
+    tBefore.toFixed(2) + " → " + tAfter.toFixed(2));
+  FY.teardownExercise();
+
+  const failed = rows.filter((r) => !r.pass).length;
+  console.table(rows);
+  return { passed: rows.length - failed, failed, failures: rows.filter((r) => !r.pass).map((r) => r.name + ": " + r.detail) };
+}
+
 function startMove(idx) {
   document.getElementById("testMove").value = String(idx);
   try { document.getElementById("testStart").click(); } catch {}
