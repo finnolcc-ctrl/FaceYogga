@@ -1091,8 +1091,7 @@ function advanceGate() {
 function snapRep() {
   const g = State.phaseGate;
   if (!g) return;
-  const peak = g.peakPrecision || 0;
-  const petals = peak >= 0.9 ? 3 : peak >= 0.7 ? 2 : peak >= 0.5 ? 1 : 0;
+  const petals = petalTier(g.peakPrecision || 0);
   g.petals = g.petals || [];
   g.petals.push(petals);
   g.reps++;
@@ -1515,6 +1514,7 @@ function setPhaseVisual(kind) {
   const visual = document.getElementById("phaseVisual");
   const letter = document.getElementById("phaseLetter");
   const dot    = document.getElementById("phaseDot");
+  if (!visual || !letter || !dot) return;   // test.html has no stage visual
 
   visual.className = "phase-visual " + (kind || "");
   letter.classList.remove("show");
@@ -1770,6 +1770,72 @@ function drawSmoothContour(ctx, pts, indices, w, h, opts) {
   ctx.restore();
 }
 
+// --- Shared helpers for targets and Bloom ---
+
+// Petals earned by a rep, from its peak precision (0..3).
+function petalTier(peak) {
+  return peak >= 0.9 ? 3 : peak >= 0.7 ? 2 : peak >= 0.5 ? 1 : 0;
+}
+
+// Same tier rule the Report mandala uses; null = no petal.
+function mandalaTier(moveState) {
+  if (moveState.status !== "completed" && moveState.status !== "partial") return null;
+  const q = typeof moveState.quality === "number"
+    ? moveState.quality
+    : (moveState.status === "completed" ? 7 : 3);
+  return q >= 10 ? "q3" : q >= 7 ? "q2" : q >= 4 ? "q1" : "q0";
+}
+
+function easeOutCubic(t) {
+  const c = Math.min(1, Math.max(0, t));
+  return 1 - Math.pow(1 - c, 3);
+}
+
+// Moves whose detected reps grow a bud and bloom. Round 1: A↔U only.
+const BLOOM_MOVES = new Set(["vowel_a_u"]);
+
+// Centre and radii (canvas px) of the active phase's target shape.
+// Vowels: ellipse around the mouth. Pucker: zone / ring-dot near neutral lips.
+function targetGeometry(pts, w, h, moveId, phase) {
+  if (moveId === "pucker_side_to_side" || moveId === "pucker_circles") {
+    const dev = lipDeviation(pts);
+    if (!dev) return null;
+    const noseX = dev.noseX * w;
+    const neutralLipY = (dev.noseY + dev.eyeDistX * 0.35) * h;
+    const eyeDistPx = dev.eyeDistX * w;
+    if (moveId === "pucker_side_to_side") {
+      const sign = phase === "left" ? 1 : -1;
+      const r = eyeDistPx * 0.045;
+      return { cx: noseX + sign * eyeDistPx * 0.1, cy: neutralLipY, rx: r, ry: r };
+    }
+    const angles = { left: 0, up: -Math.PI / 2, right: Math.PI, down: Math.PI / 2 };
+    const angle = angles[phase];
+    if (angle === undefined) return null;
+    const ring = eyeDistPx * 0.095;
+    const r = eyeDistPx * 0.038;
+    return { cx: noseX + Math.cos(angle) * ring, cy: neutralLipY + Math.sin(angle) * ring, rx: r, ry: r };
+  }
+
+  const corners = [pts[61], pts[291]];
+  const lips = [pts[13], pts[14]];
+  const eyes = [pts[33], pts[263]];
+  if (!corners[0] || !corners[1] || !lips[0] || !lips[1] || !eyes[0] || !eyes[1]) return null;
+  const cx = ((corners[0].x + corners[1].x) / 2) * w;
+  const cy = ((lips[0].y + lips[1].y) / 2) * h;
+  const eyeDist = Math.hypot((eyes[1].x - eyes[0].x) * w, (eyes[1].y - eyes[0].y) * h);
+  switch (moveId + ":" + phase) {
+    case "vowel_a_u:a":
+      return { cx, cy, rx: eyeDist * 0.17, ry: eyeDist * 0.22 };
+    case "vowel_a_u:u":
+    case "vowel_e_u:u":
+      return { cx, cy, rx: eyeDist * 0.09, ry: eyeDist * 0.11 };
+    case "vowel_e_u:e":
+      return { cx, cy, rx: eyeDist * 0.26, ry: eyeDist * 0.08 };
+    default:
+      return null;
+  }
+}
+
 function drawPuckerGuide(ctx, pts, w, h, moveId, phase) {
   if (moveId !== "pucker_side_to_side" && moveId !== "pucker_circles") return;
   const dev = lipDeviation(pts);
@@ -1778,6 +1844,7 @@ function drawPuckerGuide(ctx, pts, w, h, moveId, phase) {
   const noseX = dev.noseX * w;
   const neutralLipY = (dev.noseY + dev.eyeDistX * 0.35) * h;
   const eyeDistPx = dev.eyeDistX * w;
+  const geo = targetGeometry(pts, w, h, moveId, phase);
   const matchScore = matchForActivePhase();
   const warm = matchScore;
   const gateFill = State.phaseGate?.fill || 0;
@@ -1785,9 +1852,8 @@ function drawPuckerGuide(ctx, pts, w, h, moveId, phase) {
   ctx.save();
 
   if (moveId === "pucker_side_to_side") {
-    const sign = phase === "left" ? 1 : -1;
-    const targetX = noseX + sign * eyeDistPx * 0.1;
-    const targetR = eyeDistPx * 0.045;
+    const targetX = geo.cx;
+    const targetR = geo.rx;
 
     // Target zone
     ctx.strokeStyle = `rgba(255, ${210 - warm * 60}, ${160 - warm * 110}, ${0.6 + warm * 0.4})`;
@@ -1828,12 +1894,10 @@ function drawPuckerGuide(ctx, pts, w, h, moveId, phase) {
     ctx.stroke();
 
     // Target position on the ring
-    const angles = { left: 0, up: -Math.PI / 2, right: Math.PI, down: Math.PI / 2 };
-    const angle = angles[phase];
-    if (angle === undefined) { ctx.restore(); return; }
-    const tx = centerX + Math.cos(angle) * radius;
-    const ty = centerY + Math.sin(angle) * radius;
-    const targetR = eyeDistPx * 0.038;
+    if (!geo) { ctx.restore(); return; }
+    const tx = geo.cx;
+    const ty = geo.cy;
+    const targetR = geo.rx;
 
     // Target marker
     ctx.strokeStyle = `rgba(255, ${210 - warm * 60}, ${160 - warm * 110}, ${0.75 + warm * 0.25})`;
@@ -1864,29 +1928,22 @@ function drawPuckerGuide(ctx, pts, w, h, moveId, phase) {
 }
 
 function drawPhaseTarget(ctx, pts, w, h, moveId, phase) {
-  const corners = [pts[61], pts[291]];
-  const lips = [pts[13], pts[14]];
-  const eyes = [pts[33], pts[263]];
-  if (!corners[0] || !corners[1] || !lips[0] || !lips[1] || !eyes[0] || !eyes[1]) return;
+  if (!moveId.startsWith("vowel_")) return;
+  const geo = targetGeometry(pts, w, h, moveId, phase);
+  if (!geo) return;
+  const { cx, cy, rx, ry } = geo;
 
-  const cx = ((corners[0].x + corners[1].x) / 2) * w;
-  const cy = ((lips[0].y + lips[1].y) / 2) * h;
-  const eyeDist = Math.hypot((eyes[1].x - eyes[0].x) * w, (eyes[1].y - eyes[0].y) * h);
-
-  let rx, ry, matchScore = 0;
+  let matchScore = 0;
   const bs = State.blendshapes;
   switch (moveId + ":" + phase) {
     case "vowel_a_u:a":
-      rx = eyeDist * 0.17; ry = eyeDist * 0.22;
       matchScore = Math.min(1, (bs.jawOpen || 0) / 0.35);
       break;
     case "vowel_a_u:u":
     case "vowel_e_u:u":
-      rx = eyeDist * 0.09; ry = eyeDist * 0.11;
       matchScore = Math.min(1, (bs.mouthPucker || 0) / 0.45);
       break;
     case "vowel_e_u:e":
-      rx = eyeDist * 0.26; ry = eyeDist * 0.08;
       matchScore = Math.min(1, (((bs.mouthSmileLeft || 0) + (bs.mouthSmileRight || 0)) / 2) / 0.30);
       break;
     default: return;
@@ -2075,6 +2132,11 @@ window.FaceYoga = {
   renderMandala,
   renderRepDots,
   evaluatePrecision,
+  petalTier,
+  mandalaTier,
+  easeOutCubic,
+  targetGeometry,
+  BLOOM_MOVES,
   async loadRoutine() {
     const res = await fetch("routine.v2.json");
     State.routine = await res.json();
