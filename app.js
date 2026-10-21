@@ -215,10 +215,44 @@ function onEnterOnbStep(step) {
   }
 }
 
+function attachCameraToElement(videoEl, stageEl) {
+  if (!videoEl || !stageEl) return;
+  if (State.cameraStream) {
+    try {
+      videoEl.srcObject = State.cameraStream;
+      videoEl.play().catch(() => {});
+      stageEl.classList.add("is-active");
+    } catch {}
+  } else {
+    stageEl.classList.remove("is-active");
+  }
+}
+
+async function ensureCameraStream() {
+  if (State.cameraStream) return State.cameraStream;
+  try {
+    State.cameraStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
+      audio: false,
+    });
+    return State.cameraStream;
+  } catch {
+    return null;
+  }
+}
+
 function completeOnboarding() {
   State.onboarding.name = document.getElementById("onbName")?.value || State.onboarding.name;
+  State.onboarding.reminderTime = document.getElementById("onbReminder")?.value || State.onboarding.reminderTime;
   saveOnboarding();
   localStorage.setItem(ONB_STORAGE_KEY, "true");
+  // Release the onboarding camera so the exercise flow can request its own
+  if (State.cameraStream) {
+    State.cameraStream.getTracks().forEach((t) => t.stop());
+    State.cameraStream = null;
+  }
+  if (State.onbScanTimer) { clearInterval(State.onbScanTimer); State.onbScanTimer = null; }
+  if (State.onbCalibTimer) { clearInterval(State.onbCalibTimer); State.onbCalibTimer = null; }
   renderHome();
   show("home");
 }
@@ -238,13 +272,19 @@ function pickPill(groupId, val) {
   group.querySelectorAll(".onb-pill").forEach((p) => p.classList.toggle("is-selected", p.dataset.val === String(val)));
 }
 
-// Face-scan simulation — walks the fake percent to 100 then unlocks the button
-function startFaceScan() {
+// Face-scan — attaches live camera into the stage, walks fake percent to 100,
+// then unlocks the Continue button
+async function startFaceScan() {
   const stage = document.querySelector('.screen[data-screen="faceScan"] .onb-scan-stage');
+  const video = document.getElementById("onbScanVideo");
   const pctEl = document.getElementById("onbScanPct");
   const btn   = document.getElementById("onbScanNext");
   const btnText = document.getElementById("onbScanBtnText");
   if (!stage || !pctEl || !btn) return;
+
+  await ensureCameraStream();
+  attachCameraToElement(video, stage);
+
   let pct = 0;
   if (State.onbScanTimer) clearInterval(State.onbScanTimer);
   pctEl.textContent = "0%";
@@ -267,7 +307,12 @@ const CALIB_POSES = [
   { move: "brow",  cue: "Lift your brows gently" },
   { move: "cheek", cue: "Puff your cheeks softly" },
 ];
-function startCalibCountdown() {
+async function startCalibCountdown() {
+  const stage = document.querySelector('.screen[data-screen="teachMoves"] .onb-calib-stage');
+  const video = document.getElementById("onbCalibVideo");
+  await ensureCameraStream();
+  attachCameraToElement(video, stage);
+
   if (State.onbCalibTimer) clearInterval(State.onbCalibTimer);
   State.onbCalibIdx = 0;
   stepCalibPose();
@@ -384,6 +429,13 @@ document.addEventListener("click", (e) => {
     const val = pill.dataset.val;
     if (group?.id === "onbExperience") { State.onboarding.experience = val; pickPill("onbExperience", val); }
     if (group?.id === "onbTime")       { State.onboarding.dailyMinutes = Number(val); pickPill("onbTime", val); }
+  }
+});
+document.addEventListener("input", (e) => {
+  if (e.target?.id === "onbReminder" && State.onboarding) {
+    State.onboarding.reminderTime = e.target.value;
+    const mirror = document.getElementById("onbReminderTime2");
+    if (mirror) mirror.textContent = e.target.value;
   }
 });
 // Toggle rows

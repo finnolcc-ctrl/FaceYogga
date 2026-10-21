@@ -106,10 +106,10 @@
     </div>
 
     <label class="onb-label">GENTLE REMINDER</label>
-    <div class="onb-reminder">
+    <label class="onb-reminder">
       <span>Every day at</span>
-      <strong id="onbReminder" class="onb-reminder-time">20:30</strong>
-    </div>
+      <input type="time" id="onbReminder" class="onb-reminder-time" value="20:30">
+    </label>
 
     <div class="onb-footer">
       <button class="onb-btn-primary" data-action="onbNext">
@@ -231,7 +231,8 @@
     <p class="onb-sub">Hold each move for a moment.</p>
 
     <div class="onb-calib-stage">
-      <div class="onb-calib-glow"></div>
+      <video id="onbCalibVideo" playsinline autoplay muted></video>
+      <div class="onb-calib-vignette"></div>
       <div class="onb-calib-ring">
         <svg viewBox="0 0 150 150" class="onb-calib-arc" aria-hidden="true">
           <defs>
