@@ -772,6 +772,7 @@ function updateSessionProgress() {
 // --- Demo phase ---
 function runDemo(move) {
   const demoMs = State.routine.defaults.demoMs;
+  Bloom.clearMove();
   setStageLabel("Demo");
   document.getElementById("phaseCue").textContent = move.title.en;
   document.getElementById("phaseSub").textContent = move.script.introEn;
@@ -829,6 +830,8 @@ function runActiveDetection(move) {
 
   setStageLabel("Match");
   renderRepDots(requiredReps, []);
+  if (BLOOM_MOVES.has(move.id)) Bloom.startMove(s.moveIndex, requiredReps);
+  else Bloom.useDots();
 
   State.phaseGate = {
     moveId: move.id,
@@ -1165,7 +1168,11 @@ function autoAdvance(quality) {
     : "you kept going.";
   if (cueEl) cueEl.textContent = text;
   if (subEl) subEl.textContent = "";
-  State.timers.rest = setTimeout(() => nextMove(), 1800);
+  const s = State.session;
+  const move = State.routine.moves[s.moveIndex];
+  Bloom.completeMove(s.moveIndex, s.moves[s.moveIndex]);
+  // Bloom moves wait for the last bloom to land and gather (≤ 2.6 s).
+  State.timers.rest = setTimeout(() => nextMove(), BLOOM_MOVES.has(move.id) ? 2600 : 1800);
 }
 
 function showCompletionFlash(quality) {
@@ -1281,10 +1288,128 @@ const Bloom = {
     return this.el;
   },
 
-  reset() {
+  // --- Garden row + mini mandala ---
+
+  // Detected Bloom move: one empty slot per required rep.
+  startMove(moveIndex, slotCount) {
     const el = this.ensure();
+    this.clearMove();
+    el.screen?.classList.remove("bloom-off");
+    if (!el.garden) return;
+    for (let i = 0; i < slotCount; i++) {
+      const slot = document.createElement("span");
+      slot.className = "slot" + (i === 0 ? " current" : "");
+      el.garden.appendChild(slot);
+    }
+    el.garden.classList.add("on");
+  },
+
+  // Detected move without Bloom (yet): keep the old rep dots.
+  useDots() {
+    const el = this.ensure();
+    this.clearMove();
+    el.screen?.classList.add("bloom-off");
+  },
+
+  // Timer-paced move: a stem tied to the clock only. No counts, no grading.
+  startPaced(moveIndex, plannedMs) {
+    const el = this.ensure();
+    this.clearMove();
+    el.screen?.classList.remove("bloom-off");
+    this.plannedMs = plannedMs || 1;
+    if (!el.garden) return;
+    const stem = document.createElement("div");
+    stem.className = "stem";
+    el.garden.appendChild(stem);
+    el.garden.classList.add("on");
+  },
+
+  // Grow the stem toward `targetMs` of the planned time over `overMs`.
+  pacedTick(targetMs, overMs) {
+    const stem = this.el?.garden?.querySelector(".stem");
+    if (!stem) return;
+    stem.style.setProperty("--grow", Math.min(1, targetMs / this.plannedMs).toFixed(3));
+    stem.style.setProperty("--grow-ms", Math.max(0, overMs) + "ms");
+  },
+
+  // Move finished: gather into one blossom, then fly it to the mini mandala.
+  completeMove(moveIndex, moveState) {
+    const el = this.ensure();
+    const tier = mandalaTier(moveState);
+    const garden = el.garden?.classList.contains("on") ? el.garden : null;
+    const stem = garden?.querySelector(".stem");
+    if (!tier) { stem?.classList.add("fade"); return; }
+    if (!garden) { this.fillMandala(moveIndex, tier); return; }
+
+    this.pendingPetal = { moveIndex, tier };
+    // Let in-flight blooms land first (a burst lasts 1.4 s).
+    const now = performance.now();
+    const waitMs = stem ? 0 : Math.max(0, ...this.bursts.map((b) => 1400 - (now - b.t0)));
+    clearTimeout(this.completionTimer);
+    this.completionTimer = setTimeout(() => {
+      if (!stem) garden.classList.add("gather");
+      const blossom = document.createElement("div");
+      blossom.className = "blossom" + (moveState.status === "partial" ? " small" : "");
+      blossom.style.background = PETAL_PRESETS[moveIndex]?.grad || "";
+      garden.appendChild(blossom);
+      this.completionTimer = setTimeout(() => this.flyToMandala(blossom, moveIndex, tier), 600);
+    }, waitMs);
+  },
+
+  flyToMandala(blossom, moveIndex, tier) {
+    const target = this.el?.mandala?.children[moveIndex];
+    if (!target) { this.finishPetal(); return; }
+    const from = blossom.getBoundingClientRect();
+    const to = target.getBoundingClientRect();
+    const dx = (to.left + to.width / 2) - (from.left + from.width / 2);
+    const dy = (to.top + to.height / 2) - (from.top + from.height / 2);
+    const s = Math.max(0.2, to.height / from.height);
+    // The open animation owns `transform`; drop it before transitioning.
+    blossom.style.animation = "none";
+    blossom.style.transform = "rotate(-45deg) scale(1)";
+    void blossom.offsetWidth;
+    blossom.style.transition = "transform .6s cubic-bezier(.3,0,.2,1), opacity .6s ease";
+    blossom.style.transform = `translate(${dx}px, ${dy}px) rotate(-45deg) scale(${s})`;
+    blossom.style.opacity = "0.4";
+    this.completionTimer = setTimeout(() => this.finishPetal(), 600);
+  },
+
+  finishPetal() {
+    const p = this.pendingPetal;
+    this.pendingPetal = null;
+    if (p) this.fillMandala(p.moveIndex, p.tier);
+  },
+
+  fillMandala(moveIndex, tier) {
+    const mp = this.el?.mandala?.children[moveIndex];
+    if (!mp) return;
+    mp.className = "mp " + tier;
+    mp.style.background = PETAL_PRESETS[moveIndex]?.grad || "";
+  },
+
+  // Next move, retry or skip: drop in-flight blooms, keep an earned petal.
+  clearMove() {
+    const el = this.ensure();
+    clearTimeout(this.completionTimer);
+    this.finishPetal();
     this.bud = null;
     this.bursts = [];
+    if (el.garden) {
+      el.garden.innerHTML = "";
+      el.garden.classList.remove("on", "gather");
+    }
+  },
+
+  reset() {
+    const el = this.ensure();
+    clearTimeout(this.completionTimer);
+    this.pendingPetal = null;
+    this.clearMove();
+    for (const mp of el.mandala?.children || []) {
+      mp.className = "mp";
+      mp.style.background = "";
+    }
+    el.screen?.classList.remove("bloom-off");
     this.hidden = false;
     this.setPillVisible(false);
     this.pill.x = this.pill.y = null;
@@ -1398,6 +1523,9 @@ const Bloom = {
       x: geo.cx, y: geo.cy, r: Math.max(geo.rx, geo.ry),
       t0: performance.now(),
     });
+    const slots = this.el?.garden?.querySelectorAll(".slot") || [];
+    slots[slotIndex]?.classList.remove("current");
+    slots[slotIndex + 1]?.classList.add("current");
   },
 
   // Garden slot centre in canvas pixels (inverse of the pill mapping).
@@ -1550,6 +1678,7 @@ function runActivePaced(move) {
 
   setStageLabel("Follow");
   renderRhythmDots(cycleCountFor(move), 0);
+  Bloom.startPaced(s.moveIndex, move.activeMs);
 
   let i = 0;
   const activeStart = performance.now();
@@ -1577,6 +1706,8 @@ function runActivePaced(move) {
     }
 
     i++;
+    const phaseEndMs = sched.slice(0, i).reduce((sum, q) => sum + q.durationMs, 0);
+    Bloom.pacedTick(phaseEndMs, p.durationMs);
     State.timers.phase = setTimeout(runPhase, p.durationMs);
   };
   runPhase();
@@ -1646,6 +1777,7 @@ function handleSelfResult(status) {
   moveState.status = status;                   // completed | partial | skipped
   moveState.userConfirmed = status === "completed";
   moveState.endedAt = new Date().toISOString();
+  Bloom.completeMove(s.moveIndex, moveState);
 
   // Short rest with outro
   setStageLabel("Rest");

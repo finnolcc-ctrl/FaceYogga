@@ -1217,7 +1217,7 @@ ul, ol { list-style: none; }
   height: calc(var(--grow, 0) * 100%);
   background: linear-gradient(0deg, #5dcaa5, #ead1b5);
   border-radius: 2px;
-  transition: height .3s linear;
+  transition: height var(--grow-ms, .3s) linear;
 }
 .bloom-garden .stem.fade { opacity: 0; }
 
