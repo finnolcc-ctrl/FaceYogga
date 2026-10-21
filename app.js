@@ -160,10 +160,19 @@ const ONBOARDING_FLOW = ["welcome", "goals", "about", "privacy", "faceScan", "te
 const ONB_STORAGE_KEY = "faceyoga.onboarded";
 const ONB_PROFILE_KEY = "faceyoga.profile";
 
+// Onboarding is finished but not yet released — flip to true when the
+// rest of the app is ready. In the meantime visit ?onboarding=1 to preview.
+const ENABLE_ONBOARDING = false;
+
 function bootOnboarding() {
-  const done = localStorage.getItem(ONB_STORAGE_KEY) === "true";
   State.onboarding = loadOnboarding();
-  if (done) {
+  const forcePreview = new URLSearchParams(location.search).get("onboarding") === "1";
+  if (!ENABLE_ONBOARDING && !forcePreview) {
+    show("home");
+    return;
+  }
+  const done = localStorage.getItem(ONB_STORAGE_KEY) === "true";
+  if (done && !forcePreview) {
     show("home");
   } else {
     show("welcome");
