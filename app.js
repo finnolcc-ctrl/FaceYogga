@@ -1109,6 +1109,7 @@ function snapRep() {
   g.lastOvershoot = null;
   g.lastSoundBucket = null;
   renderRepDots(g.requiredReps, g.petals);
+  if (BLOOM_MOVES.has(g.moveId)) Bloom.burst(petals, g.reps - 1);
   flashSnap(petals);
   AudioEngine.snap(petals);
 
@@ -1295,7 +1296,8 @@ const Bloom = {
 
   startPhase(moveId, phase) {
     this.ensure();
-    this.bud = { moveId, phase, open: 0 };
+    // Keep the last known position so a snap before the first draw still blooms.
+    this.bud = { moveId, phase, open: 0, geo: this.bud?.geo };
     if (!State.paused) this.hidden = false;   // new move after a self-check
   },
 
@@ -1344,6 +1346,168 @@ const Bloom = {
 
     if (!State.phaseGate) this.bud = null;
     this.placePill(pts, w, h, dt, ctx.canvas);
+    if (!this.bud && !this.bursts.length) return;
+
+    ctx.save();
+    this.drawBud(ctx, pts, w, h, dt);
+    this.drawBursts(ctx, w, h, dt, now);
+    ctx.restore();
+  },
+
+  // Five hairline petals around the target; they open with the gate fill
+  // and fold back as it drains. Never opens ahead of the fill.
+  drawBud(ctx, pts, w, h, dt) {
+    const bud = this.bud;
+    if (!bud || !pts || !BLOOM_MOVES.has(bud.moveId)) return;
+    const geo = targetGeometry(pts, w, h, bud.moveId, bud.phase);
+    if (!geo) return;
+    bud.geo = geo;
+    const fill = State.phaseGate?.fill || 0;
+    if (!State.paused) bud.open += (fill - bud.open) * (1 - Math.exp(-dt / 0.08));
+    bud.open = Math.max(0, Math.min(bud.open, fill));
+
+    const r = Math.max(geo.rx, geo.ry);
+    ctx.strokeStyle = "rgba(234,209,181,0.7)";
+    ctx.lineWidth = Math.max(1, w / 400);
+    for (let i = 0; i < 5; i++) {
+      const theta = -Math.PI / 2 + i * (2 * Math.PI / 5);
+      const bx = geo.cx + Math.cos(theta) * geo.rx;
+      const by = geo.cy + Math.sin(theta) * geo.ry;
+      const len = (0.15 + 0.35 * bud.open) * r;
+      this.leafPath(ctx, bx, by, theta + bud.open * (35 * Math.PI / 180), len, len * 0.32);
+      ctx.stroke();
+    }
+  },
+
+  // Quadratic leaf from (x, y) pointing along `angle`.
+  leafPath(ctx, x, y, angle, len, width) {
+    const dx = Math.cos(angle), dy = Math.sin(angle);
+    const tx = x + dx * len, ty = y + dy * len;
+    const mx = x + dx * len * 0.5, my = y + dy * len * 0.5;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.quadraticCurveTo(mx - dy * width, my + dx * width, tx, ty);
+    ctx.quadraticCurveTo(mx + dy * width, my - dx * width, x, y);
+  },
+
+  burst(tier, slotIndex) {
+    const geo = this.bud?.geo;
+    if (!geo) return;
+    this.bursts.push({
+      tier, slotIndex,
+      x: geo.cx, y: geo.cy, r: Math.max(geo.rx, geo.ry),
+      t0: performance.now(),
+    });
+  },
+
+  // Garden slot centre in canvas pixels (inverse of the pill mapping).
+  slotCenter(slotIndex, w, h) {
+    const slot = this.el?.garden?.querySelectorAll(".slot")[slotIndex];
+    const canvas = this.el?.layer;
+    if (!slot || !canvas || !this.el.garden.classList.contains("on")) return null;
+    const s = slot.getBoundingClientRect();
+    const c = canvas.getBoundingClientRect();
+    if (!c.width || !c.height) return null;
+    return {
+      x: (1 - (s.left + s.width / 2 - c.left) / c.width) * w,
+      y: ((s.top + s.height / 2 - c.top) / c.height) * h,
+      r: (s.width / 2) * (w / c.width),
+    };
+  },
+
+  // Open (0–0.8 s) → drift to the garden slot (0.8–1.4 s) → land.
+  drawBursts(ctx, w, h, dt, now) {
+    for (const b of this.bursts) {
+      if (State.paused) { b.t0 += dt * 1000; continue; }   // freeze, resume without a jump
+      const t = (now - b.t0) / 1000;
+      if (t < 0.8) {
+        const e = easeOutCubic(t / 0.8);
+        const glow = 0.45 * Math.sin(Math.PI * Math.min(1, t / 0.6));
+        this.drawGlow(ctx, b.x, b.y, b.r * 1.6, glow, b.tier);
+        if (b.tier === 0) this.drawSeeds(ctx, b.x, b.y, b.r, t / 0.8);
+        else this.drawFlower(ctx, b.x, b.y, b.r * (0.6 + 0.5 * e), e, b.tier, 1);
+      } else if (t < 1.4) {
+        const u = easeOutCubic((t - 0.8) / 0.6);
+        const slot = this.slotCenter(b.slotIndex, w, h);
+        const size = b.r * 1.1;
+        if (slot) {
+          const cx = (b.x + slot.x) / 2, cy = (b.y + slot.y) / 2 - 0.3 * h;
+          const x = (1 - u) * (1 - u) * b.x + 2 * (1 - u) * u * cx + u * u * slot.x;
+          const y = (1 - u) * (1 - u) * b.y + 2 * (1 - u) * u * cy + u * u * slot.y;
+          this.drawFlower(ctx, x, y, size + (slot.r - size) * u, 1, b.tier, 1);
+        } else {
+          this.drawFlower(ctx, b.x, b.y, size, 1, b.tier, 1 - u);
+        }
+      } else {
+        b.done = true;
+        const slotEl = this.el?.garden?.querySelectorAll(".slot")[b.slotIndex];
+        if (slotEl && this.el.garden.classList.contains("on")) {
+          slotEl.classList.remove("current");
+          slotEl.classList.add("filled", "p" + b.tier);
+          AudioEngine.transition(784);
+        }
+      }
+    }
+    this.bursts = this.bursts.filter((b) => !b.done);
+  },
+
+  drawGlow(ctx, x, y, r, alpha, tier) {
+    if (alpha <= 0) return;
+    const rgb = tier === 3 ? "255,124,185" : tier === 2 ? "255,138,198" : tier === 1 ? "234,209,181" : "255,255,255";
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, `rgba(${rgb},${alpha})`);
+    g.addColorStop(1, `rgba(${rgb},0)`);
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  },
+
+  // Tier 0: a small white seed puff drifting up and fading.
+  drawSeeds(ctx, x, y, r, p) {
+    ctx.fillStyle = `rgba(255,255,255,${0.8 * (1 - p)})`;
+    for (let i = 0; i < 7; i++) {
+      const a = (i / 7) * Math.PI * 2;
+      const sx = x + Math.cos(a) * r * 0.35;
+      const sy = y + Math.sin(a) * r * 0.2 - p * 0.4 * r;
+      ctx.beginPath();
+      ctx.arc(sx, sy, Math.max(1.5, r * 0.04), 0, Math.PI * 2);
+      ctx.fill();
+    }
+  },
+
+  petalFill(ctx, x, y, size, tier) {
+    if (tier === 1) return "#ead1b5";
+    if (tier === 0) return "rgba(255,255,255,0.55)";
+    const g = ctx.createRadialGradient(x, y, 0, x, y, size);
+    if (tier === 2) {
+      g.addColorStop(0, "#ff6a7d");
+      g.addColorStop(1, "#ff8ac6");
+    } else {
+      g.addColorStop(0, "#fff2d3");
+      g.addColorStop(0.55, "#ff7cb9");
+      g.addColorStop(1, "#9668ff");
+    }
+    return g;
+  },
+
+  // Five filled petals around (x, y); `open` 0..1 spreads them.
+  drawFlower(ctx, x, y, size, open, tier, alpha) {
+    if (alpha <= 0) return;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    if (tier === 3) {
+      ctx.shadowColor = "rgba(150,104,255,0.6)";
+      ctx.shadowBlur = size * 0.6;
+    }
+    ctx.fillStyle = this.petalFill(ctx, x, y, size, tier);
+    const count = tier === 0 ? 3 : 5;
+    for (let i = 0; i < count; i++) {
+      const theta = -Math.PI / 2 + i * (2 * Math.PI / count) + open * 0.3;
+      this.leafPath(ctx, x, y, theta, size * (0.55 + 0.45 * open), size * 0.22);
+      ctx.fill();
+    }
+    ctx.restore();
   },
 
   // Pill sits between lower lip (14) and chin (152), mapped from the
