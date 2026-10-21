@@ -13,40 +13,30 @@ const MP_VERSION = "1.1.0";
 const MODEL_URL  = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
 
 // =====================================================
-// FACE FILTER OVERLAY — Snapchat-style
-// Draws coloured muscle zones over the face. The real
-// face underneath is darkened by a semi-opaque base so
-// the user sees a stylised muscle map, not themselves.
+// FACE MODEL — line-art portrait
+// Camera video is hidden; the canvas paints pure black
+// and draws a refined hairline-contour face.
+//   - face oval (whisper-thin)
+//   - brows + nose bridge (thin)
+//   - eye contours (crisp)
+//   - lip contours with a single rose accent
+//   - 7 small key-point dots with a soft halo
+// Everything is drawn with smooth quadratic curves so
+// the geometry reads as designed, not polygonal.
 // =====================================================
-const SHOW_STICKERS = false;   // sticker overlay disabled per user request 2026-10-21
+const SHOW_STICKERS = false;
 
-const FACE_OVAL = [
-  10, 338, 297, 332, 284, 251, 389, 356, 454, 323,
-  361, 288, 397, 365, 379, 378, 400, 377, 152, 148,
-  176, 149, 150, 136, 172, 58, 132, 93, 234, 127,
-  162, 21, 54, 103, 67, 109,
-];
-
-// Each zone = a muscle group polygon + its colour. Rendered as a soft
-// radial gradient clipped to the polygon so the colour fades at edges
-// and neighbouring zones blend naturally.
-const FACE_ZONES = [
-  { name: "forehead",   lms: [10,109,67,103,54,68,71,139,21,162,54,104,69,108,151,337,299,333,298,301,368,389,251,284,332,297,338], color: "#88a5ff", alpha: 0.32 },
-  { name: "leftBrow",   lms: [46,53,52,65,55,107,66,105,63,70], color: "#ff80c6", alpha: 0.5 },
-  { name: "rightBrow",  lms: [276,283,282,295,285,336,296,334,293,300], color: "#ff80c6", alpha: 0.5 },
-  { name: "leftEye",    lms: [33,246,161,160,159,158,157,173,133,155,154,153,145,144,163,7], color: "#c0a2ff", alpha: 0.5 },
-  { name: "rightEye",   lms: [362,398,384,385,386,387,388,466,263,249,390,373,374,380,381,382], color: "#c0a2ff", alpha: 0.5 },
-  { name: "nose",       lms: [168,193,245,122,196,174,198,236,219,48,115,220,45,4,275,440,344,278,456,420,399,351,417,6], color: "#ffcf8c", alpha: 0.38 },
-  { name: "leftCheek",  lms: [234,227,116,143,35,228,229,230,231,232,233,128,121,142,36,205,187,207,213,147,123,117,118,101], color: "#ff8d7a", alpha: 0.42 },
-  { name: "rightCheek", lms: [454,447,345,372,265,448,449,450,451,452,453,357,350,371,266,425,411,427,433,376,352,346,347,330], color: "#ff8d7a", alpha: 0.42 },
-  { name: "mouth",      lms: [61,185,40,39,37,0,267,269,270,409,291,375,321,405,314,17,84,181,91,146], color: "#ff6a8a", alpha: 0.55 },
-  { name: "chin",       lms: [152,148,176,149,150,169,170,171,175,199,208,428,262,418,377,400,378,379,365,397], color: "#9edfc9", alpha: 0.38 },
-];
-
-function hexRgb(h) {
-  const x = h.replace("#", "");
-  return [parseInt(x.slice(0,2),16), parseInt(x.slice(2,4),16), parseInt(x.slice(4,6),16)];
-}
+const CONTOURS = {
+  oval:      [10,338,297,332,284,251,389,356,454,323,361,288,397,365,379,378,400,377,152,148,176,149,150,136,172,58,132,93,234,127,162,21,54,103,67,109],
+  leftBrow:  [46,53,52,65,55,107,66,105,63,70],
+  rightBrow: [276,283,282,295,285,336,296,334,293,300],
+  leftEye:   [33,246,161,160,159,158,157,173,133,155,154,153,145,144,163,7],
+  rightEye:  [362,398,384,385,386,387,388,466,263,249,390,373,374,380,381,382],
+  noseBridge:[168,6,197,195,5,4,1],
+  lipsOuter: [61,185,40,39,37,0,267,269,270,409,291,375,321,405,314,17,84,181,91,146],
+  lipsInner: [78,191,80,81,82,13,312,311,310,415,308,324,318,402,317,14,87,178,88,95],
+};
+const KEY_DOTS = [10, 33, 263, 1, 61, 291, 152];
 const STICKER_SLOTS = {
   brow_green_l:  { anchor: 55,  size: 18, offset: [0, 0],  imageUrl: "stickers/brow.svg"   },
   brow_green_r:  { anchor: 285, size: 18, offset: [0, 0],  imageUrl: "stickers/brow.svg"   },
@@ -1403,81 +1393,123 @@ function drawMesh(canvas, video, landmarks) {
   if (!fitCanvasToVideo(canvas, video)) return;
   const ctx = canvas.getContext("2d");
   const w = video.videoWidth, h = video.videoHeight;
-  ctx.clearRect(0, 0, w, h);
+
+  // Pure-black ground. The camera video is hidden via CSS so the
+  // canvas is the whole image the user sees.
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0, 0, w, h);
+
   if (!landmarks || !landmarks.length) return;
   const pts = landmarks[0];
+  const scale = Math.max(0.6, w / 640);
 
-  // 1. Dark semi-opaque fill clipped to the face oval.
-  //    This hides the real face underneath while leaving the surrounding
-  //    camera backdrop visible, so the user sees a stylised muscle map.
-  const ovalPts = tracePolygon(ctx, pts, FACE_OVAL, w, h);
-  if (ovalPts.length >= 3) {
+  // Face oval — whisper-thin outer silhouette
+  drawSmoothContour(ctx, pts, CONTOURS.oval, w, h, {
+    close: true, stroke: "rgba(255,255,255,0.22)", lw: 0.9 * scale,
+  });
+
+  // Brows — thin closed arcs
+  drawSmoothContour(ctx, pts, CONTOURS.leftBrow, w, h, {
+    close: true, stroke: "rgba(255,255,255,0.55)", lw: 1.0 * scale,
+  });
+  drawSmoothContour(ctx, pts, CONTOURS.rightBrow, w, h, {
+    close: true, stroke: "rgba(255,255,255,0.55)", lw: 1.0 * scale,
+  });
+
+  // Nose bridge — subtle axis
+  drawSmoothContour(ctx, pts, CONTOURS.noseBridge, w, h, {
+    stroke: "rgba(255,255,255,0.2)", lw: 0.7 * scale,
+  });
+
+  // Eyes — crisper, closed
+  drawSmoothContour(ctx, pts, CONTOURS.leftEye, w, h, {
+    close: true, stroke: "rgba(255,255,255,0.78)", lw: 1.1 * scale,
+  });
+  drawSmoothContour(ctx, pts, CONTOURS.rightEye, w, h, {
+    close: true, stroke: "rgba(255,255,255,0.78)", lw: 1.1 * scale,
+  });
+
+  // Lips — the single colour accent on the whole model
+  drawSmoothContour(ctx, pts, CONTOURS.lipsOuter, w, h, {
+    close: true,
+    fill:   "rgba(255,138,170,0.18)",
+    stroke: "rgba(255,255,255,0.92)",
+    lw: 1.3 * scale,
+  });
+  drawSmoothContour(ctx, pts, CONTOURS.lipsInner, w, h, {
+    close: true, stroke: "rgba(255,255,255,0.32)", lw: 0.6 * scale,
+  });
+
+  // Seven key control points — tiny bright dots with soft halo
+  const dotR = Math.max(2.2, w / 260);
+  for (const idx of KEY_DOTS) {
+    const p = pts[idx];
+    if (!p) continue;
     ctx.save();
-    ctx.fillStyle = "rgba(14,16,24,0.78)";
+    ctx.shadowColor = "rgba(255,255,255,0.7)";
+    ctx.shadowBlur = 8 * scale;
+    ctx.fillStyle = "#fff";
+    ctx.beginPath();
+    ctx.arc(p.x * w, p.y * h, dotR, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
   }
 
-  // 2. Each muscle zone as a soft colour wash, clipped to its polygon.
-  for (const zone of FACE_ZONES) drawFaceZone(ctx, pts, w, h, zone);
-
-  // 3. Thin outline along the face oval so the silhouette reads.
-  if (ovalPts.length >= 3) {
-    ctx.save();
-    tracePolygon(ctx, pts, FACE_OVAL, w, h);
-    ctx.strokeStyle = "rgba(255,255,255,0.12)";
-    ctx.lineWidth = Math.max(0.6, w / 900);
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  // 4. Dotted target shape for vowel phases — exercise overlays sit on top.
+  // Exercise target overlays sit on top so gameplay still reads.
   if (State.active) {
     drawPhaseTarget(ctx, pts, w, h, State.active.moveId, State.active.phase);
     drawPuckerGuide(ctx, pts, w, h, State.active.moveId, State.active.phase);
   }
 }
 
-// Trace a polygon from an index list onto the current path; also returns
-// the collected pixel points so callers don't have to recompute them.
-function tracePolygon(ctx, pts, indices, w, h) {
-  const out = [];
-  ctx.beginPath();
-  for (let i = 0; i < indices.length; i++) {
-    const p = pts[indices[i]];
+// Draws a smooth curve through the landmark path using quadratic
+// Bezier midpoints. Any missing landmark is skipped silently.
+function drawSmoothContour(ctx, pts, indices, w, h, opts) {
+  const path = [];
+  for (const i of indices) {
+    const p = pts[i];
     if (!p) continue;
-    const x = p.x * w, y = p.y * h;
-    out.push([x, y]);
-    if (out.length === 1) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
+    path.push([p.x * w, p.y * h]);
   }
-  ctx.closePath();
-  return out;
-}
+  if (path.length < 2) return;
 
-function drawFaceZone(ctx, pts, w, h, zone) {
-  const poly = tracePolygon(ctx, pts, zone.lms, w, h);
-  if (poly.length < 3) return;
-
-  // centroid + max radius for the gradient
-  let cx = 0, cy = 0;
-  for (const [x, y] of poly) { cx += x; cy += y; }
-  cx /= poly.length; cy /= poly.length;
-  let maxR = 0;
-  for (const [x, y] of poly) {
-    const d = Math.hypot(x - cx, y - cy);
-    if (d > maxR) maxR = d;
-  }
-  if (maxR < 1) return;
-
-  const [r, g, b] = hexRgb(zone.color);
-  const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, maxR * 1.35);
-  grad.addColorStop(0,   `rgba(${r},${g},${b},${zone.alpha})`);
-  grad.addColorStop(0.7, `rgba(${r},${g},${b},${zone.alpha * 0.55})`);
-  grad.addColorStop(1,   `rgba(${r},${g},${b},0)`);
   ctx.save();
-  ctx.fillStyle = grad;
-  ctx.fill();
+  ctx.beginPath();
+  if (path.length >= 3) {
+    const n = path.length;
+    const start = opts.close
+      ? [(path[n-1][0] + path[0][0]) / 2, (path[n-1][1] + path[0][1]) / 2]
+      : path[0];
+    ctx.moveTo(start[0], start[1]);
+    for (let i = 0; i < n - 1; i++) {
+      const [cx, cy] = path[i];
+      const [nx, ny] = path[i + 1];
+      ctx.quadraticCurveTo(cx, cy, (cx + nx) / 2, (cy + ny) / 2);
+    }
+    if (opts.close) {
+      const [cx, cy] = path[n - 1];
+      ctx.quadraticCurveTo(cx, cy, (cx + path[0][0]) / 2, (cy + path[0][1]) / 2);
+      ctx.closePath();
+    } else {
+      const [cx, cy] = path[n - 1];
+      ctx.lineTo(cx, cy);
+    }
+  } else {
+    ctx.moveTo(path[0][0], path[0][1]);
+    ctx.lineTo(path[1][0], path[1][1]);
+  }
+
+  if (opts.fill) {
+    ctx.fillStyle = opts.fill;
+    ctx.fill();
+  }
+  if (opts.stroke) {
+    ctx.strokeStyle = opts.stroke;
+    ctx.lineWidth = opts.lw || 1;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.stroke();
+  }
   ctx.restore();
 }
 

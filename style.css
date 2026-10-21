@@ -614,13 +614,14 @@ ul, ol { list-style: none; }
   width: 100%; height: 100%;
   object-fit: cover;
   transform: scaleX(-1);
-  filter: brightness(1.18) contrast(1.05) saturate(1.1);
   z-index: 0;
-  opacity: 0;
-  transition: opacity .5s ease;
+  opacity: 0;              /* video is hidden; mesh canvas is the whole picture */
+  pointer-events: none;
 }
-#exerciseVideo.show { opacity: 1; }
-#setupVideo { filter: brightness(1.12) contrast(1.03) saturate(1.08); }
+#exerciseVideo.show { opacity: 0; }
+#setupVideo { opacity: 0; }
+.camera-stage { background: #000; }
+.screen-exercise, .screen-exercise.in-camera-mode { background: #000; }
 .exercise-dim {
   position: absolute;
   inset: 0;
