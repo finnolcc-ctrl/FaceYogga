@@ -7,7 +7,11 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Face Yoga</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500&family=Doto:wght@800&family=Inter:wght@500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="onboarding.css">
 </head>
 <body>
 
@@ -20,8 +24,301 @@
 
 <main id="app">
 
+  <!-- ============ 1. WELCOME (19:184) ============ -->
+  <section class="screen onb onb-welcome" data-screen="welcome" hidden>
+    <div class="onb-welcome-visual" aria-hidden="true">
+      <img src="onboarding/assets/character.png" alt="" class="onb-welcome-character">
+    </div>
+    <div class="onb-welcome-body">
+      <span class="onb-brandline">FACE YOGA</span>
+      <h1 class="onb-h1 onb-h1--large">Quietly care<br>for your face</h1>
+      <p class="onb-sub">A short, gentle break you follow along with. Setup<br>takes about two minutes.</p>
+    </div>
+    <button class="onb-btn-primary" data-action="onbStart">
+      <span>Get started</span>
+      <img src="onboarding/assets/arrow-right.svg" alt="" class="onb-arrow-icon">
+    </button>
+  </section>
+
+  <!-- ============ 2. GOALS (19:219) ============ -->
+  <section class="screen onb" data-screen="goals" hidden>
+    <header class="onb-topbar">
+      <button class="onb-back" data-action="onbBack" aria-label="Back">
+        <img src="onboarding/assets/arrow-left.svg" alt="">
+      </button>
+      <div class="onb-progress" data-step="1"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+      <span class="onb-step">2/7</span>
+    </header>
+    <h1 class="onb-h1"><span>What brings</span><span class="dim">you here?</span></h1>
+    <p class="onb-sub">Pick as many as you like.</p>
+    <div class="onb-goals-grid" id="onbGoalsGrid">
+      <button class="onb-goal onb-goal--blue" data-goal="calm" aria-pressed="false">
+        <span class="onb-goal-check" aria-hidden="true"></span>
+        <span class="onb-goal-label">Take a calm<br>break</span>
+      </button>
+      <button class="onb-goal onb-goal--amber" data-goal="learn" aria-pressed="false">
+        <span class="onb-goal-check" aria-hidden="true"></span>
+        <span class="onb-goal-label">Learn the<br>moves</span>
+      </button>
+      <button class="onb-goal onb-goal--pink" data-goal="unwind" aria-pressed="false">
+        <span class="onb-goal-check" aria-hidden="true"></span>
+        <span class="onb-goal-label">Unwind after<br>screens</span>
+      </button>
+      <button class="onb-goal onb-goal--teal" data-goal="habit" aria-pressed="false">
+        <span class="onb-goal-check" aria-hidden="true"></span>
+        <span class="onb-goal-label">Build a daily<br>habit</span>
+      </button>
+    </div>
+    <div class="onb-footer">
+      <button class="onb-btn-primary" data-action="onbNext">
+        <span>Continue</span>
+        <img src="onboarding/assets/arrow-right.svg" alt="" class="onb-arrow-icon">
+      </button>
+    </div>
+  </section>
+
+  <!-- ============ 3. ABOUT YOU (19:296) ============ -->
+  <section class="screen onb" data-screen="about" hidden>
+    <header class="onb-topbar">
+      <button class="onb-back" data-action="onbBack" aria-label="Back">
+        <img src="onboarding/assets/arrow-left.svg" alt="">
+      </button>
+      <div class="onb-progress" data-step="2"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+      <span class="onb-step">3/7</span>
+    </header>
+    <h1 class="onb-h1"><span>A little</span><span class="dim">about you</span></h1>
+
+    <label class="onb-label">WHAT SHOULD WE CALL YOU</label>
+    <input id="onbName" class="onb-input" type="text" placeholder="Mia" value="Mia" autocomplete="given-name">
+
+    <label class="onb-label">FACE YOGA EXPERIENCE</label>
+    <div class="onb-pill-row" id="onbExperience">
+      <button class="onb-pill onb-pill--pink is-selected" data-val="new">New</button>
+      <button class="onb-pill" data-val="some">Some</button>
+      <button class="onb-pill" data-val="regular">Regular</button>
+    </div>
+
+    <label class="onb-label">TIME EACH DAY</label>
+    <div class="onb-pill-row" id="onbTime">
+      <button class="onb-pill" data-val="2">2 min</button>
+      <button class="onb-pill onb-pill--teal is-selected" data-val="4">4 min</button>
+      <button class="onb-pill" data-val="6">6 min</button>
+    </div>
+
+    <label class="onb-label">GENTLE REMINDER</label>
+    <div class="onb-reminder">
+      <span>Every day at</span>
+      <strong id="onbReminder" class="onb-reminder-time">20:30</strong>
+    </div>
+
+    <div class="onb-footer">
+      <button class="onb-btn-primary" data-action="onbNext">
+        <span>Continue</span>
+        <img src="onboarding/assets/arrow-right.svg" alt="" class="onb-arrow-icon">
+      </button>
+    </div>
+  </section>
+
+  <!-- ============ 4. PRIVACY (19:371) ============ -->
+  <section class="screen onb" data-screen="privacy" hidden>
+    <header class="onb-topbar">
+      <button class="onb-back" data-action="onbBack" aria-label="Back">
+        <img src="onboarding/assets/arrow-left.svg" alt="">
+      </button>
+      <div class="onb-progress" data-step="3"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+      <span class="onb-step">4/7</span>
+    </header>
+    <h1 class="onb-h1"><span>You're in</span><span class="dim">control</span></h1>
+    <p class="onb-sub">Your face is analysed on this phone. Nothing is<br>uploaded.</p>
+
+    <div class="onb-toggles" id="onbToggles">
+      <label class="onb-toggle">
+        <div class="onb-toggle-text">
+          <span class="onb-toggle-title">Camera analysis</span>
+          <span class="onb-toggle-sub">On-device only. Needed to give live feedback.</span>
+        </div>
+        <input type="checkbox" data-key="camera" checked>
+        <span class="onb-switch"></span>
+      </label>
+      <label class="onb-toggle">
+        <div class="onb-toggle-text">
+          <span class="onb-toggle-title">Save progress here</span>
+          <span class="onb-toggle-sub">Streaks and history stay on this phone.</span>
+        </div>
+        <input type="checkbox" data-key="save" checked>
+        <span class="onb-switch"></span>
+      </label>
+      <label class="onb-toggle">
+        <div class="onb-toggle-text">
+          <span class="onb-toggle-title">Practice reminders</span>
+          <span class="onb-toggle-sub">A quiet nudge at <span id="onbReminderTime2">20:30</span>.</span>
+        </div>
+        <input type="checkbox" data-key="reminders">
+        <span class="onb-switch"></span>
+      </label>
+      <label class="onb-toggle">
+        <div class="onb-toggle-text">
+          <span class="onb-toggle-title">Anonymous usage stats</span>
+          <span class="onb-toggle-sub">Help us improve. Never includes video.</span>
+        </div>
+        <input type="checkbox" data-key="stats">
+        <span class="onb-switch"></span>
+      </label>
+    </div>
+
+    <p class="onb-footnote">Your browser will ask for permission next. Change any of this later in Settings.</p>
+
+    <div class="onb-footer">
+      <button class="onb-btn-primary" data-action="onbAllowCamera">
+        <span>Allow camera and continue</span>
+        <img src="onboarding/assets/arrow-right.svg" alt="" class="onb-arrow-icon">
+      </button>
+    </div>
+  </section>
+
+  <!-- ============ 5. FACE SCAN (19:446) ============ -->
+  <section class="screen onb" data-screen="faceScan" hidden>
+    <header class="onb-topbar">
+      <button class="onb-back" data-action="onbBack" aria-label="Back">
+        <img src="onboarding/assets/arrow-left.svg" alt="">
+      </button>
+      <div class="onb-progress" data-step="4"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+      <span class="onb-step">5/7</span>
+    </header>
+    <h1 class="onb-h1"><span>Let's find</span><span class="dim">your face</span></h1>
+    <p class="onb-sub">Prop your phone up and centre your face in the oval.</p>
+
+    <div class="onb-scan-stage">
+      <video id="onbScanVideo" playsinline autoplay muted></video>
+      <canvas id="onbScanMesh"></canvas>
+      <div class="onb-scan-glow"></div>
+      <div class="onb-scan-bar"></div>
+      <div class="onb-scan-caption">
+        <div class="onb-scan-pct" id="onbScanPct">0%</div>
+        <div class="onb-scan-label">SCANNING</div>
+      </div>
+    </div>
+
+    <div class="onb-chip-row">
+      <span class="onb-chip onb-chip--done" id="onbChipFace">
+        <img src="onboarding/assets/check-mini.svg" alt="">
+        Looking for face
+      </span>
+      <span class="onb-chip onb-chip--done" id="onbChipDistance">
+        <img src="onboarding/assets/check-mini.svg" alt="">
+        Adjust distance
+      </span>
+      <span class="onb-chip onb-chip--outline" id="onbChipLight">Find brighter light</span>
+    </div>
+
+    <div class="onb-footer">
+      <button class="onb-btn-primary onb-btn-primary--idle" data-action="onbNext" id="onbScanNext">
+        <span id="onbScanBtnText">Hold still...</span>
+      </button>
+    </div>
+  </section>
+
+  <!-- ============ 6. CALIBRATE (19:509) ============ -->
+  <section class="screen onb" data-screen="teachMoves" hidden>
+    <header class="onb-topbar">
+      <button class="onb-back" data-action="onbBack" aria-label="Back">
+        <img src="onboarding/assets/arrow-left.svg" alt="">
+      </button>
+      <div class="onb-progress" data-step="5"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+      <span class="onb-step">6/7</span>
+    </header>
+    <h1 class="onb-h1"><span>Teach us</span><span class="dim">your moves</span></h1>
+    <p class="onb-sub">Hold each move for a moment.</p>
+
+    <div class="onb-calib-stage">
+      <div class="onb-calib-glow"></div>
+      <div class="onb-calib-ring">
+        <svg viewBox="0 0 150 150" class="onb-calib-arc" aria-hidden="true">
+          <defs>
+            <linearGradient id="onbCalibGrad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="#9be3e6"/>
+              <stop offset="50%" stop-color="#cda9cb"/>
+              <stop offset="100%" stop-color="#ff6fb0"/>
+            </linearGradient>
+          </defs>
+          <circle cx="75" cy="75" r="68" fill="none" stroke="rgba(255,255,255,.14)" stroke-width="4"/>
+          <circle cx="75" cy="75" r="68" fill="none" stroke="url(#onbCalibGrad)" stroke-width="4" stroke-linecap="round" stroke-dasharray="427" stroke-dashoffset="427" id="onbCalibArc" transform="rotate(-90 75 75)"/>
+        </svg>
+        <div class="onb-calib-center">
+          <strong class="onb-calib-count" id="onbCalibCount">3</strong>
+          <span class="onb-calib-hold">HOLD</span>
+        </div>
+      </div>
+      <p class="onb-calib-cue" id="onbCalibCue">Make a big smile, lips closed</p>
+    </div>
+
+    <div class="onb-chip-row" id="onbCalibChips">
+      <span class="onb-chip onb-chip--done" data-move="smile">
+        <img src="onboarding/assets/check-mini.svg" alt="">
+        Smile
+      </span>
+      <span class="onb-chip onb-chip--outline" data-move="brow">Brow raise</span>
+      <span class="onb-chip onb-chip--outline" data-move="cheek">Cheek puff</span>
+    </div>
+
+    <div class="onb-footer">
+      <button class="onb-btn-ghost" data-action="onbNext">Skip for now</button>
+    </div>
+  </section>
+
+  <!-- ============ 7. YOUR PLAN (19:566) ============ -->
+  <section class="screen onb" data-screen="plan" hidden>
+    <header class="onb-topbar">
+      <button class="onb-back" data-action="onbBack" aria-label="Back">
+        <img src="onboarding/assets/arrow-left.svg" alt="">
+      </button>
+      <div class="onb-progress" data-step="6"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+      <span class="onb-step">7/7</span>
+    </header>
+    <span class="onb-label onb-label--standalone">MADE FOR <span id="onbPlanName">MIA</span></span>
+
+    <article class="onb-plan-card">
+      <header class="onb-plan-head">
+        <h2 class="onb-plan-title">Gentle Start</h2>
+        <p class="onb-plan-sub">4 weeks, 5 days a week</p>
+      </header>
+      <div class="onb-plan-min">
+        <strong class="onb-plan-min-num" id="onbPlanMin">4</strong>
+        <span>min a day</span>
+        <button class="onb-plan-edit" data-action="onbEditPlan">Edit</button>
+      </div>
+      <div class="onb-plan-week">
+        <span class="onb-label">WEEK 1 FOCUS</span>
+        <ol class="onb-plan-moves">
+          <li><span class="onb-move-num onb-move-num--teal">1</span><span class="onb-move-title">Pucker side to side</span><span class="onb-move-dur">20s</span></li>
+          <li><span class="onb-move-num onb-move-num--teal-grad">2</span><span class="onb-move-title">A to U</span><span class="onb-move-dur">20s</span></li>
+          <li><span class="onb-move-num onb-move-num--teal">3</span><span class="onb-move-title">Air side to side</span><span class="onb-move-dur">20s</span></li>
+        </ol>
+      </div>
+    </article>
+
+    <div class="onb-days">
+      <div class="onb-day"><span class="onb-day-dot is-on"></span><span>M</span></div>
+      <div class="onb-day"><span class="onb-day-dot is-on"></span><span>T</span></div>
+      <div class="onb-day"><span class="onb-day-dot"></span><span>W</span></div>
+      <div class="onb-day"><span class="onb-day-dot is-on"></span><span>T</span></div>
+      <div class="onb-day"><span class="onb-day-dot is-on"></span><span>F</span></div>
+      <div class="onb-day"><span class="onb-day-dot is-on"></span><span>S</span></div>
+      <div class="onb-day"><span class="onb-day-dot"></span><span>S</span></div>
+    </div>
+
+    <p class="onb-plan-footnote">Based on your goals, experience and time. Moves ease up or add on as you go.</p>
+
+    <div class="onb-footer">
+      <button class="onb-btn-primary" data-action="onbComplete">
+        <span>Start first session</span>
+        <img src="onboarding/assets/arrow-right.svg" alt="" class="onb-arrow-icon">
+      </button>
+    </div>
+  </section>
+
   <!-- ============ HOME ============ -->
-  <section class="screen" data-screen="home">
+  <section class="screen" data-screen="home" hidden>
     <header class="topbar">
       <span class="brand">Face Yoga</span>
       <span class="date" id="homeDate">—</span>

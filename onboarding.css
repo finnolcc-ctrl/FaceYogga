@@ -1,0 +1,816 @@
+/* ============================================================
+   Onboarding — matches Figma 19:184 / 19:219 / 19:296 / 19:371 /
+   19:446 / 19:509 / 19:566. All 7 screens live under .onb and
+   share the dark Cinder (#07080c) ground + Outfit/Doto type.
+   ============================================================ */
+
+:root {
+  --onb-cinder:      #07080c;
+  --onb-cinder-5:    #0b0b10;
+  --onb-vellum:      #ffffff;
+  --onb-vellum-60:   rgba(255,255,255,.60);
+  --onb-vellum-55:   rgba(255,255,255,.55);
+  --onb-vellum-45:   rgba(255,255,255,.45);
+  --onb-vellum-18:   rgba(255,255,255,.18);
+  --onb-vellum-14:   rgba(255,255,255,.14);
+  --onb-vellum-12:   rgba(255,255,255,.12);
+  --onb-vellum-06:   rgba(255,255,255,.06);
+  --onb-vellum-05:   rgba(255,255,255,.05);
+  --onb-grey-91:     #efe9e1;
+  --onb-grey-95:     #f5f4ef;
+  --onb-ironside:    #6b6a68;
+  --onb-cyan:        #3fc4b2;
+  --onb-cyan-61:     #5fd6c4;
+  --onb-cyan-79:     #a6ede6;
+  --onb-rose-72:     #ff6fb0;
+  --onb-pink-lumi1:  #fdc8de;
+  --onb-pink-lumi2:  #fcd7f8;
+
+  --onb-font-display: "Outfit", -apple-system, "SF Pro Display", "Helvetica Neue", sans-serif;
+  --onb-font-mono:    "Doto", "SF Mono", monospace;
+  --onb-font-label:   "Inter", -apple-system, "Helvetica Neue", sans-serif;
+}
+
+/* Full-bleed take-over so the onboarding dominates the viewport */
+body:has(.onb:not([hidden])) { background: var(--onb-cinder); }
+body:has(.onb:not([hidden])) #aurora { display: none; }
+
+.onb {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: var(--onb-cinder);
+  color: var(--onb-vellum);
+  font-family: var(--onb-font-display);
+  font-weight: 300;
+  padding:
+    calc(env(safe-area-inset-top, 0) + 24px)
+    20px
+    calc(env(safe-area-inset-bottom, 0) + 24px);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto;
+  animation: onbFade .35s ease both;
+}
+@keyframes onbFade { from { opacity: 0; } to { opacity: 1; } }
+
+/* ---- Topbar: back · 6-segment progress · 2/7 ---- */
+.onb-topbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 44px;
+  flex-shrink: 0;
+}
+.onb-back {
+  background: var(--onb-vellum-06);
+  border: 1px solid var(--onb-vellum-14);
+  border-radius: 20px;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  padding: 0 6px;
+  cursor: pointer;
+}
+.onb-back img { width: 18px; height: 18px; display: block; }
+.onb-progress {
+  display: flex;
+  gap: 6px;
+  flex: 1;
+}
+.onb-progress > span {
+  flex: 1;
+  height: 4px;
+  background: var(--onb-vellum-18);
+  border-radius: 4px;
+  transition: background .2s;
+}
+.onb-progress[data-step="1"] > span:nth-child(-n+1),
+.onb-progress[data-step="2"] > span:nth-child(-n+2),
+.onb-progress[data-step="3"] > span:nth-child(-n+3),
+.onb-progress[data-step="4"] > span:nth-child(-n+4),
+.onb-progress[data-step="5"] > span:nth-child(-n+5),
+.onb-progress[data-step="6"] > span:nth-child(-n+6) { background: #ffffff; }
+/* Face-scan & later use grey-95 */
+.onb-progress[data-step="4"] > span:nth-child(-n+4),
+.onb-progress[data-step="5"] > span:nth-child(-n+5),
+.onb-progress[data-step="6"] > span:nth-child(-n+6) { background: var(--onb-grey-95); }
+
+.onb-step {
+  font-family: var(--onb-font-mono);
+  font-weight: 800;
+  font-size: 13px;
+  color: var(--onb-vellum-60);
+  font-variation-settings: "ROND" 0;
+}
+
+/* ---- Headings & body ---- */
+.onb-h1 {
+  font-family: var(--onb-font-display);
+  font-weight: 300;
+  font-size: 32px;
+  line-height: 35.2px;
+  letter-spacing: -0.01em;
+  margin: 0;
+  padding-top: 9px;
+}
+.onb-h1 span { display: block; }
+.onb-h1 .dim { color: rgba(255,255,255,.5); }
+.onb-h1--large { font-size: 42px; line-height: 44.52px; }
+
+.onb-sub {
+  font-family: var(--onb-font-display);
+  font-weight: 300;
+  font-size: 15px;
+  line-height: 21px;
+  color: var(--onb-vellum-60);
+  margin: 0;
+}
+
+.onb-label {
+  display: block;
+  font-family: var(--onb-font-display);
+  font-weight: 300;
+  font-size: 11px;
+  letter-spacing: 2.75px;
+  color: var(--onb-vellum-55);
+  padding-top: 8px;
+  text-transform: uppercase;
+}
+.onb-label--standalone { padding-top: 4px; }
+
+.onb-footnote {
+  font-family: var(--onb-font-display);
+  font-weight: 300;
+  font-size: 12px;
+  color: var(--onb-vellum-45);
+  text-align: center;
+  margin: 0;
+}
+
+/* ---- Primary button (white gradient pill) ---- */
+.onb-footer { margin-top: auto; padding-top: 24px; }
+.onb-btn-primary {
+  width: 100%;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: linear-gradient(180deg, var(--onb-vellum) 0%, var(--onb-grey-91) 100%);
+  color: var(--onb-cinder-5);
+  font-family: var(--onb-font-display);
+  font-weight: 400;
+  font-size: 17px;
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: transform .1s ease;
+}
+.onb-btn-primary:active { transform: scale(.98); }
+.onb-btn-primary--idle {
+  background: var(--onb-vellum-05);
+  color: var(--onb-vellum);
+  border: 1px solid var(--onb-vellum-18);
+}
+.onb-arrow-icon { width: 20px; height: 20px; display: block; }
+
+.onb-btn-ghost {
+  width: 100%;
+  height: 56px;
+  background: rgba(255,255,255,.08);
+  border: 1px solid var(--onb-vellum-18);
+  color: var(--onb-vellum);
+  font-family: var(--onb-font-display);
+  font-weight: 400;
+  font-size: 17px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+/* ============================================================
+   SCREEN 1 — Welcome
+   ============================================================ */
+.onb-welcome { gap: 0; padding-top: calc(env(safe-area-inset-top, 0) + 24px); }
+.onb-welcome-visual {
+  position: relative;
+  margin-top: 24px;
+  height: 364px;
+  display: grid;
+  place-items: center;
+  filter: drop-shadow(0 0 60px rgba(234, 124, 255, .25));
+}
+.onb-welcome-character {
+  width: 320px;
+  height: auto;
+  object-fit: contain;
+  object-position: bottom;
+  filter:
+    drop-shadow(0 0 24px rgba(255, 170, 220, .3))
+    drop-shadow(0 0 60px rgba(130, 200, 255, .18));
+}
+.onb-welcome-body { padding: 40px 0 0; }
+.onb-brandline {
+  display: block;
+  font-family: var(--onb-font-display);
+  font-weight: 300;
+  font-size: 12px;
+  letter-spacing: 3.6px;
+  color: var(--onb-vellum-60);
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+
+/* ============================================================
+   SCREEN 2 — Goals (2x2 gradient tiles)
+   ============================================================ */
+.onb-goals-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding-top: 8px;
+}
+.onb-goal {
+  height: 176px;
+  border: 0;
+  border-radius: 28px;
+  padding: 16px;
+  text-align: left;
+  color: var(--onb-vellum);
+  font-family: var(--onb-font-display);
+  font-weight: 400;
+  font-size: 19px;
+  line-height: 21.85px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  opacity: .5;
+  transition: opacity .2s ease, transform .1s;
+}
+.onb-goal:active { transform: scale(.98); }
+.onb-goal[aria-pressed="true"] { opacity: 1; }
+
+.onb-goal-check {
+  width: 30px;
+  height: 30px;
+  border-radius: 15px;
+  background: var(--onb-vellum-18);
+  position: relative;
+  z-index: 2;
+  flex-shrink: 0;
+  transition: background .2s ease;
+}
+.onb-goal[aria-pressed="true"] .onb-goal-check {
+  background: var(--onb-cinder-5);
+}
+.onb-goal[aria-pressed="true"] .onb-goal-check::after {
+  content: "";
+  position: absolute;
+  inset: 8px;
+  background: url("onboarding/assets/check-light.svg") center / contain no-repeat;
+  filter: invert(1);
+}
+
+.onb-goal-label { position: relative; z-index: 2; }
+
+/* Gradient backgrounds per tile — exact Figma radial-gradients */
+.onb-goal--blue {
+  background:
+    radial-gradient(ellipse 130% 100% at 50% 60%,
+      rgba(108,140,255,.67) 0%,
+      rgba(146,143,255,1) 52%,
+      rgba(141,166,255,1) 100%);
+  box-shadow:
+    inset -8px -8px 12.3px rgba(153,194,255,.9),
+    inset 6px 7px 16px 2px rgba(153,194,255,.9);
+}
+.onb-goal--amber {
+  background:
+    radial-gradient(ellipse 110% 90% at 50% 60%,
+      rgba(216,210,168,1) 0%,
+      rgba(213,170,128,1) 53%,
+      rgba(175,133,104,1) 77%,
+      rgba(138,96,81,1) 100%);
+  box-shadow:
+    inset -6px -6px 16px rgba(252,229,215,.95),
+    inset 6px 6px 16px rgba(252,229,215,.95);
+}
+.onb-goal--pink {
+  background: linear-gradient(180deg, #d8b4a8 2.5%, #d580b1 52%, #8a5179 95%);
+  box-shadow:
+    inset -6px -6px 16px rgba(253,200,222,.95),
+    inset 6px 6px 16px rgba(252,215,248,.95);
+}
+.onb-goal--teal {
+  background:
+    radial-gradient(ellipse at 70% 90%,
+      rgba(141,232,255,1) 0%,
+      rgba(179,187,255,1) 17%,
+      rgba(218,143,255,1) 34%,
+      rgba(239,123,217,.42) 75%,
+      rgba(255,108,189,0) 100%);
+  box-shadow:
+    inset -8px -8px 12.3px rgba(153,255,247,.9),
+    inset 6px 7px 16px 2px rgba(153,255,247,.9);
+}
+
+/* ============================================================
+   SCREEN 3 — About you
+   ============================================================ */
+.onb-input {
+  width: 100%;
+  height: 56px;
+  background: var(--onb-vellum-06);
+  border: 1px solid var(--onb-vellum-12);
+  border-radius: 36px;
+  padding: 0 18px;
+  color: var(--onb-vellum);
+  font-family: var(--onb-font-display);
+  font-weight: 300;
+  font-size: 18px;
+  outline: none;
+}
+.onb-input::placeholder { color: var(--onb-vellum-55); }
+.onb-input:focus { border-color: var(--onb-vellum-18); }
+
+.onb-pill-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.onb-pill {
+  height: 44px;
+  padding: 0 18px;
+  background: var(--onb-vellum-05);
+  border: 1px solid var(--onb-vellum-18);
+  border-radius: 999px;
+  color: var(--onb-vellum);
+  font-family: var(--onb-font-display);
+  font-weight: 400;
+  font-size: 15px;
+  cursor: pointer;
+  transition: transform .1s;
+}
+.onb-pill:active { transform: scale(.96); }
+.onb-pill.is-selected {
+  color: var(--onb-cinder-5);
+  border: 0;
+}
+.onb-pill--pink.is-selected {
+  background: linear-gradient(180deg, #d8b4a8 2.5%, #d580b1 52%, #8a5179 95%);
+  box-shadow:
+    inset -6px -6px 16px rgba(253,200,222,.95),
+    inset 6px 6px 16px rgba(252,215,248,.95);
+}
+.onb-pill--teal.is-selected {
+  background: linear-gradient(180deg, #a8d8cd 2.5%, #80d5b8 52%, #51838a 95%);
+  box-shadow:
+    inset -6px -6px 16px rgba(200,253,222,.95),
+    inset 6px 6px 16px rgba(200,253,222,.95);
+}
+
+.onb-reminder {
+  height: 60px;
+  background: var(--onb-vellum-06);
+  border: 1px solid var(--onb-vellum-12);
+  border-radius: 36px;
+  padding: 0 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.onb-reminder > span {
+  font-family: var(--onb-font-display);
+  font-weight: 300;
+  font-size: 16px;
+  color: var(--onb-vellum);
+}
+.onb-reminder-time {
+  font-family: var(--onb-font-mono);
+  font-weight: 800;
+  font-size: 20px;
+  font-variation-settings: "ROND" 0;
+}
+
+/* ============================================================
+   SCREEN 4 — Privacy toggles
+   ============================================================ */
+.onb-toggles {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 6px;
+}
+.onb-toggle {
+  display: grid;
+  grid-template-columns: 1fr 52px;
+  align-items: center;
+  gap: 14px;
+  background: var(--onb-vellum-06);
+  border: 1px solid var(--onb-vellum-12);
+  border-radius: 36px;
+  padding: 16px 19px;
+  cursor: pointer;
+}
+.onb-toggle input { display: none; }
+.onb-toggle-text { display: flex; flex-direction: column; gap: 3px; }
+.onb-toggle-title {
+  font-family: var(--onb-font-display);
+  font-weight: 400;
+  font-size: 16px;
+  color: var(--onb-vellum);
+}
+.onb-toggle-sub {
+  font-family: var(--onb-font-display);
+  font-weight: 300;
+  font-size: 13px;
+  line-height: 16.9px;
+  color: var(--onb-vellum-55);
+}
+.onb-switch {
+  width: 52px;
+  height: 30px;
+  background: var(--onb-vellum-18);
+  border-radius: 999px;
+  position: relative;
+  transition: background .2s;
+}
+.onb-switch::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 24px;
+  height: 24px;
+  background: var(--onb-vellum);
+  border-radius: 50%;
+  transition: left .22s cubic-bezier(.3,0,.2,1);
+}
+.onb-toggle input:checked ~ .onb-switch {
+  background: var(--onb-cyan);
+  box-shadow: inset 6px 6px 16px rgba(252,215,248,.4);
+}
+.onb-toggle input:checked ~ .onb-switch::after { left: 25px; }
+
+/* ============================================================
+   SCREEN 5 — Face scan
+   ============================================================ */
+.onb-scan-stage {
+  position: relative;
+  width: 100%;
+  height: 432px;
+  border: 1px solid var(--onb-vellum-12);
+  border-radius: 115px;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse 60% 80% at 50% 50%,
+      rgba(0,0,0,1) 15%,
+      rgba(10,13,13,1) 24%,
+      rgba(39,52,53,1) 50%,
+      rgba(93,169,173,1) 68%,
+      rgba(155,227,230,1) 89%);
+  box-shadow:
+    inset -6px -6px 20px 10px rgba(255,255,255,.36),
+    inset 6px 6px 20px 10px rgba(255,247,250,.36);
+}
+.onb-scan-stage video,
+.onb-scan-stage canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 1;
+  opacity: 0;
+  pointer-events: none;
+}
+.onb-scan-stage.is-active video,
+.onb-scan-stage.is-active canvas { opacity: 1; }
+.onb-scan-stage.is-active { background: #000; }
+.onb-scan-glow {
+  position: absolute;
+  inset: 24px;
+  background: radial-gradient(ellipse at center, rgba(162,226,229,.6) 0%, transparent 70%);
+  filter: blur(12px);
+  z-index: 2;
+  pointer-events: none;
+}
+.onb-scan-bar {
+  position: absolute;
+  left: 20%;
+  right: 20%;
+  top: 50%;
+  height: 4px;
+  background: linear-gradient(90deg, transparent, var(--onb-rose-72), transparent);
+  box-shadow: 0 0 18px var(--onb-rose-72);
+  border-radius: 2px;
+  z-index: 3;
+  animation: onbScanBar 2.5s cubic-bezier(.5,0,.5,1) infinite alternate;
+}
+@keyframes onbScanBar {
+  from { top: 30%; }
+  to   { top: 70%; }
+}
+.onb-scan-caption {
+  position: absolute;
+  bottom: 60px;
+  left: 0; right: 0;
+  text-align: center;
+  z-index: 4;
+}
+.onb-scan-pct {
+  font-family: var(--onb-font-mono);
+  font-weight: 800;
+  font-size: 28px;
+  color: var(--onb-vellum);
+  font-variation-settings: "ROND" 0;
+}
+.onb-scan-label {
+  font-family: var(--onb-font-display);
+  font-weight: 300;
+  font-size: 12px;
+  letter-spacing: 3px;
+  color: var(--onb-vellum-55);
+  margin-top: 4px;
+}
+
+.onb-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 8px;
+}
+.onb-chip {
+  height: 48px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  font-family: var(--onb-font-display);
+  font-weight: 400;
+  font-size: 13px;
+  cursor: pointer;
+}
+.onb-chip img { width: 14px; height: 14px; }
+.onb-chip--done {
+  background: linear-gradient(72deg, var(--onb-cyan-61) 26%, var(--onb-cyan-79) 85%);
+  color: #000;
+  box-shadow:
+    inset -1px -3px 16px rgba(253,200,222,.51),
+    inset 3px -3px 16px rgba(252,215,248,.36);
+}
+.onb-chip--outline {
+  border: 1px dashed rgba(255,255,255,.3);
+  color: rgba(255,255,255,.7);
+  padding: 0 15px;
+}
+
+/* ============================================================
+   SCREEN 6 — Calibration
+   ============================================================ */
+.onb-calib-stage {
+  position: relative;
+  width: 100%;
+  height: 432px;
+  border: 1px solid var(--onb-vellum-12);
+  border-radius: 115px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: radial-gradient(ellipse at 50% 15%, #91c3c9 5%, #0b1e1f 10%, #060c0c 99%);
+}
+.onb-calib-stage::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 114px;
+  background: #a2e2e5;
+  filter: blur(11px);
+  z-index: 0;
+  opacity: .6;
+}
+.onb-calib-glow {
+  position: absolute;
+  inset: 16px;
+  border-radius: 100px;
+  background: linear-gradient(180deg, #91c3c9 5%, #0b1e1f 10%, #060c0c 99%);
+  filter: blur(14px);
+  z-index: 1;
+}
+.onb-calib-ring {
+  position: relative;
+  width: 150px;
+  height: 150px;
+  z-index: 2;
+}
+.onb-calib-arc {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  inset: 0;
+}
+.onb-calib-arc circle:last-child {
+  stroke-dashoffset: 142;
+  transition: stroke-dashoffset .9s linear;
+  filter: drop-shadow(0 0 6px var(--onb-rose-72));
+}
+.onb-calib-center {
+  position: absolute;
+  inset: 7px;
+  border-radius: 50%;
+  background: var(--onb-cinder);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+.onb-calib-count {
+  font-family: var(--onb-font-mono);
+  font-weight: 800;
+  font-size: 42px;
+  color: var(--onb-vellum);
+  font-variation-settings: "ROND" 0;
+  line-height: 1;
+}
+.onb-calib-hold {
+  font-family: var(--onb-font-display);
+  font-weight: 300;
+  font-size: 8px;
+  letter-spacing: 2px;
+  color: var(--onb-vellum-55);
+}
+.onb-calib-cue {
+  position: relative;
+  z-index: 2;
+  font-family: var(--onb-font-display);
+  font-weight: 400;
+  font-size: 20px;
+  color: var(--onb-vellum);
+  text-align: center;
+  margin-top: 20px;
+  padding: 0 20px;
+}
+
+/* ============================================================
+   SCREEN 7 — Your plan
+   ============================================================ */
+.onb-plan-card {
+  position: relative;
+  padding: 23px 36px;
+  border-radius: 67px;
+  background: linear-gradient(180deg, #7a9bf3 4%, #9989d5 12%, #130f24 61%, #000 99%);
+  box-shadow:
+    inset -6px 3px 16px rgba(253,200,222,.36),
+    inset 6px 17px 16px rgba(252,215,248,.36);
+  color: var(--onb-vellum);
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.onb-plan-head { display: flex; flex-direction: column; gap: 4px; }
+.onb-plan-title {
+  font-family: var(--onb-font-display);
+  font-weight: 300;
+  font-size: 30px;
+  line-height: 33px;
+  margin: 0;
+  color: var(--onb-vellum);
+}
+.onb-plan-sub {
+  font-family: var(--onb-font-display);
+  font-weight: 300;
+  font-size: 14px;
+  color: var(--onb-vellum);
+  margin: 0;
+}
+.onb-plan-min {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.onb-plan-min-num {
+  font-family: var(--onb-font-mono);
+  font-weight: 800;
+  font-size: 54px;
+  font-variation-settings: "ROND" 0;
+  line-height: 1;
+  color: var(--onb-vellum);
+}
+.onb-plan-min > span {
+  font-family: var(--onb-font-display);
+  font-weight: 300;
+  font-size: 14px;
+  color: var(--onb-vellum);
+  flex: 1;
+}
+.onb-plan-edit {
+  padding: 6px 12px;
+  background: rgba(11,11,16,.18);
+  border: 0;
+  border-radius: 999px;
+  color: var(--onb-vellum);
+  font-family: var(--onb-font-display);
+  font-weight: 400;
+  font-size: 12px;
+  cursor: pointer;
+}
+.onb-plan-week { display: flex; flex-direction: column; gap: 6px; }
+.onb-plan-week .onb-label { padding-top: 0; color: var(--onb-vellum); }
+.onb-plan-moves {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.onb-plan-moves li {
+  display: grid;
+  grid-template-columns: 30px 1fr auto;
+  gap: 14px;
+  align-items: center;
+  height: 44px;
+}
+.onb-move-num {
+  width: 30px;
+  height: 30px;
+  border-radius: 15px;
+  display: grid;
+  place-items: center;
+  font-family: var(--onb-font-display);
+  font-weight: 500;
+  font-size: 13px;
+  color: var(--onb-cinder-5);
+}
+.onb-move-num--teal {
+  background: #79ded0;
+  box-shadow: inset -6px -6px 16px var(--onb-pink-lumi1), inset 6px 6px 16px var(--onb-pink-lumi2);
+}
+.onb-move-num--teal-grad {
+  background: linear-gradient(145deg, var(--onb-cyan-61) 0%, var(--onb-cyan-79) 100%);
+  box-shadow: inset -6px -6px 16px var(--onb-pink-lumi1), inset 6px 6px 16px var(--onb-pink-lumi2);
+}
+.onb-move-title {
+  font-family: var(--onb-font-display);
+  font-weight: 300;
+  font-size: 16px;
+  color: var(--onb-vellum);
+}
+.onb-move-dur {
+  font-family: var(--onb-font-mono);
+  font-weight: 800;
+  font-size: 15px;
+  color: var(--onb-vellum-55);
+  font-variation-settings: "ROND" 0;
+}
+
+.onb-days {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+.onb-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.onb-day-dot {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.1);
+  border: 1px solid rgba(255,255,255,.1);
+}
+.onb-day-dot.is-on {
+  background: linear-gradient(82deg, var(--onb-cyan-61) 26%, var(--onb-cyan-79) 85%);
+  border: 0;
+  box-shadow:
+    inset -1px -3px 16px rgba(253,200,222,.51),
+    inset 3px -3px 16px rgba(252,215,248,.36);
+}
+.onb-day > span:last-child {
+  font-family: var(--onb-font-display);
+  font-weight: 300;
+  font-size: 11px;
+  color: var(--onb-vellum);
+}
+.onb-plan-footnote {
+  font-family: var(--onb-font-display);
+  font-weight: 300;
+  font-size: 13px;
+  line-height: 18.2px;
+  color: var(--onb-vellum-55);
+  margin: 0;
+}

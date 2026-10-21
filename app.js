@@ -146,13 +146,162 @@ async function init() {
   bindActions();
   renderHome();
   renderPreviewList();
-  show("home");
+  bootOnboarding();
 
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden" && State.session && !State.paused) {
       pauseExercise(true);
     }
   });
+}
+
+// -------- Onboarding boot & state --------
+const ONBOARDING_FLOW = ["welcome", "goals", "about", "privacy", "faceScan", "teachMoves", "plan"];
+const ONB_STORAGE_KEY = "faceyoga.onboarded";
+const ONB_PROFILE_KEY = "faceyoga.profile";
+
+function bootOnboarding() {
+  const done = localStorage.getItem(ONB_STORAGE_KEY) === "true";
+  State.onboarding = loadOnboarding();
+  if (done) {
+    show("home");
+  } else {
+    show("welcome");
+  }
+}
+
+function loadOnboarding() {
+  try {
+    const raw = localStorage.getItem(ONB_PROFILE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return {
+    goals: [],
+    name: "Mia",
+    experience: "new",
+    dailyMinutes: 4,
+    reminderTime: "20:30",
+    privacy: { camera: true, save: true, reminders: false, stats: false },
+  };
+}
+
+function saveOnboarding() {
+  try { localStorage.setItem(ONB_PROFILE_KEY, JSON.stringify(State.onboarding)); } catch {}
+}
+
+function currentOnbIndex() {
+  const active = document.querySelector(".onb:not([hidden])")?.dataset.screen;
+  return ONBOARDING_FLOW.indexOf(active);
+}
+
+function onbGoto(delta) {
+  const i = currentOnbIndex();
+  const next = i + delta;
+  if (next < 0) return;
+  if (next >= ONBOARDING_FLOW.length) {
+    completeOnboarding();
+    return;
+  }
+  show(ONBOARDING_FLOW[next]);
+  onEnterOnbStep(ONBOARDING_FLOW[next]);
+}
+
+function onEnterOnbStep(step) {
+  if (step === "faceScan") startFaceScan();
+  if (step === "teachMoves") startCalibCountdown();
+  if (step === "plan") {
+    document.getElementById("onbPlanName").textContent = (State.onboarding.name || "Mia").toUpperCase();
+    document.getElementById("onbPlanMin").textContent = State.onboarding.dailyMinutes;
+  }
+}
+
+function completeOnboarding() {
+  State.onboarding.name = document.getElementById("onbName")?.value || State.onboarding.name;
+  saveOnboarding();
+  localStorage.setItem(ONB_STORAGE_KEY, "true");
+  renderHome();
+  show("home");
+}
+
+// Goals grid
+function toggleGoal(key, btn) {
+  const g = State.onboarding.goals;
+  const idx = g.indexOf(key);
+  if (idx >= 0) g.splice(idx, 1); else g.push(key);
+  btn.setAttribute("aria-pressed", idx < 0 ? "true" : "false");
+}
+
+// Experience / time pills
+function pickPill(groupId, val) {
+  const group = document.getElementById(groupId);
+  if (!group) return;
+  group.querySelectorAll(".onb-pill").forEach((p) => p.classList.toggle("is-selected", p.dataset.val === String(val)));
+}
+
+// Face-scan simulation — walks the fake percent to 100 then unlocks the button
+function startFaceScan() {
+  const stage = document.querySelector('.screen[data-screen="faceScan"] .onb-scan-stage');
+  const pctEl = document.getElementById("onbScanPct");
+  const btn   = document.getElementById("onbScanNext");
+  const btnText = document.getElementById("onbScanBtnText");
+  if (!stage || !pctEl || !btn) return;
+  let pct = 0;
+  if (State.onbScanTimer) clearInterval(State.onbScanTimer);
+  pctEl.textContent = "0%";
+  btn.classList.add("onb-btn-primary--idle");
+  btnText.textContent = "Hold still...";
+  State.onbScanTimer = setInterval(() => {
+    pct = Math.min(100, pct + (3 + Math.random() * 4));
+    pctEl.textContent = Math.round(pct) + "%";
+    if (pct >= 100) {
+      clearInterval(State.onbScanTimer);
+      btn.classList.remove("onb-btn-primary--idle");
+      btnText.textContent = "Continue";
+    }
+  }, 180);
+}
+
+// Calibration countdown — 3 → 2 → 1 → next pose
+const CALIB_POSES = [
+  { move: "smile", cue: "Make a big smile, lips closed" },
+  { move: "brow",  cue: "Lift your brows gently" },
+  { move: "cheek", cue: "Puff your cheeks softly" },
+];
+function startCalibCountdown() {
+  if (State.onbCalibTimer) clearInterval(State.onbCalibTimer);
+  State.onbCalibIdx = 0;
+  stepCalibPose();
+}
+function stepCalibPose() {
+  const pose = CALIB_POSES[State.onbCalibIdx];
+  const countEl = document.getElementById("onbCalibCount");
+  const cueEl   = document.getElementById("onbCalibCue");
+  const arcEl   = document.getElementById("onbCalibArc");
+  if (!pose || !countEl) return;
+  cueEl.textContent = pose.cue;
+  document.querySelectorAll("#onbCalibChips .onb-chip").forEach((c) => {
+    const done = CALIB_POSES.slice(0, State.onbCalibIdx + 1).some((p) => p.move === c.dataset.move);
+    c.classList.toggle("onb-chip--done", done);
+    c.classList.toggle("onb-chip--outline", !done);
+  });
+  let n = 3;
+  countEl.textContent = n;
+  if (arcEl) {
+    arcEl.setAttribute("stroke-dashoffset", "427");
+    requestAnimationFrame(() => arcEl.setAttribute("stroke-dashoffset", "0"));
+  }
+  State.onbCalibTimer = setInterval(() => {
+    n--;
+    if (n <= 0) {
+      clearInterval(State.onbCalibTimer);
+      State.onbCalibIdx++;
+      if (State.onbCalibIdx < CALIB_POSES.length) {
+        setTimeout(stepCalibPose, 450);
+      }
+    } else {
+      countEl.textContent = n;
+    }
+  }, 900);
 }
 
 // -------- Screen router --------
@@ -196,7 +345,54 @@ const Actions = {
     document.getElementById("soundToggle")?.classList.toggle("on", AudioEngine.enabled);
     if (AudioEngine.enabled) AudioEngine.tone(660, 120, "sine", 0.08);
   },
+
+  // ----- Onboarding -----
+  onbStart:       () => onbGoto(1),
+  onbNext:        () => {
+    const step = document.querySelector(".onb:not([hidden])")?.dataset.screen;
+    if (step === "about") {
+      const nameInput = document.getElementById("onbName");
+      if (nameInput) State.onboarding.name = nameInput.value.trim() || "Mia";
+    }
+    onbGoto(1);
+  },
+  onbBack:        () => onbGoto(-1),
+  onbAllowCamera: async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
+      State.cameraStream = stream;
+      State.onboarding.privacy.camera = true;
+    } catch {
+      State.onboarding.privacy.camera = false;
+    }
+    onbGoto(1);
+  },
+  onbComplete:    () => completeOnboarding(),
+  onbEditPlan:    () => onbGoto(-1),
 };
+
+// Delegate pointer handlers for goals / pills / toggles
+document.addEventListener("click", (e) => {
+  const goal = e.target.closest("[data-goal]");
+  if (goal) {
+    toggleGoal(goal.dataset.goal, goal);
+    return;
+  }
+  const pill = e.target.closest(".onb-pill-row .onb-pill");
+  if (pill) {
+    const group = pill.closest(".onb-pill-row");
+    const val = pill.dataset.val;
+    if (group?.id === "onbExperience") { State.onboarding.experience = val; pickPill("onbExperience", val); }
+    if (group?.id === "onbTime")       { State.onboarding.dailyMinutes = Number(val); pickPill("onbTime", val); }
+  }
+});
+// Toggle rows
+document.addEventListener("change", (e) => {
+  const inp = e.target.closest(".onb-toggle input[type=checkbox]");
+  if (inp && State.onboarding?.privacy) {
+    State.onboarding.privacy[inp.dataset.key] = inp.checked;
+  }
+});
 
 // =========================================================
 // HOME
