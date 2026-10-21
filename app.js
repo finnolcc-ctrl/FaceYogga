@@ -144,6 +144,7 @@ async function init() {
   State.routine = await res.json();
 
   bindActions();
+  Bloom.init();
   renderHome();
   renderPreviewList();
   bootOnboarding();
@@ -690,6 +691,7 @@ function startSession(mode) {
     })),
   };
   State.observations = { matchedMs: 0, smileWarmth: 0, samples: 0 };
+  Bloom.reset();
 
   requestWakeLock();
   show("exercise");
@@ -714,6 +716,7 @@ function startSession(mode) {
 
 function teardownExercise() {
   clearAllTimers();
+  Bloom.reset();
   State.session = null;
   State.active = null;
   State.paused = false;
@@ -874,8 +877,11 @@ function stepGatedPhase() {
   g.lastTextUpdate = 0;
   g.lastBucket = null;
   g.lastOvershoot = null;
+  const waiting = pickFromBank(FEEDBACK_BANKS.waiting);
   document.getElementById("phaseCue").textContent = p.cue.en;
-  document.getElementById("phaseSub").textContent = pickFromBank(FEEDBACK_BANKS.waiting);
+  document.getElementById("phaseSub").textContent = waiting;
+  Bloom.startPhase(g.moveId, p.phase);
+  Bloom.setHint(waiting);
   setPhaseVisual(phaseVisualFor(g.moveId, p.phase));
 }
 
@@ -1029,6 +1035,7 @@ function updateFeedback(precision, result) {
 
   const subEl = document.getElementById("phaseSub");
   if (subEl) subEl.textContent = text;
+  Bloom.setHint(text);
 
   // Play a soft audio bump when crossing into "good" or "perfect".
   if ((bucket === "good" || bucket === "perfect") && g.lastSoundBucket !== bucket) {
@@ -1244,6 +1251,132 @@ const AudioEngine = {
 };
 window.AudioEngine = AudioEngine;
 
+// =====================================================
+// Bloom — bud, burst, drift, hint pill, garden, mini mandala.
+// Every element is optional: test.html has none of them, so Bloom then
+// draws on the face canvas and skips the DOM parts.
+// =====================================================
+const Bloom = {
+  el: null,
+  bud: null,                // { moveId, phase, open }
+  bursts: [],
+  hidden: false,
+  lastDraw: 0,
+  pill: { x: null, y: null, text: "", visible: false, swapTimer: null },
+
+  init() {
+    this.el = {
+      screen: document.querySelector("[data-screen='exercise']"),
+      layer: document.getElementById("bloomLayer"),
+      pill: document.getElementById("hintPill"),
+      garden: document.getElementById("bloomGarden"),
+      mandala: document.getElementById("miniMandala"),
+    };
+    if (this.el.pill) this.el.pill.hidden = false;
+  },
+
+  ensure() {
+    if (!this.el) this.init();
+    return this.el;
+  },
+
+  reset() {
+    const el = this.ensure();
+    this.bud = null;
+    this.bursts = [];
+    this.hidden = false;
+    this.setPillVisible(false);
+    this.pill.x = this.pill.y = null;
+    if (el.layer) {
+      el.layer.classList.remove("on");
+      el.layer.getContext("2d").clearRect(0, 0, el.layer.width, el.layer.height);
+    }
+  },
+
+  startPhase(moveId, phase) {
+    this.ensure();
+    this.bud = { moveId, phase, open: 0 };
+    if (!State.paused) this.hidden = false;   // new move after a self-check
+  },
+
+  hide() {
+    this.hidden = true;
+    this.setPillVisible(false);
+  },
+
+  show() {
+    this.hidden = false;
+  },
+
+  setHint(text) {
+    const pillEl = this.ensure().pill;
+    if (!pillEl || text === this.pill.text) return;
+    this.pill.text = text;
+    clearTimeout(this.pill.swapTimer);
+    if (!this.pill.visible) { pillEl.textContent = text; return; }
+    pillEl.classList.add("swap");
+    this.pill.swapTimer = setTimeout(() => {
+      pillEl.textContent = this.pill.text;
+      pillEl.classList.remove("swap");
+    }, 90);
+  },
+
+  setPillVisible(on) {
+    const pillEl = this.el?.pill;
+    if (!pillEl || this.pill.visible === on) return;
+    this.pill.visible = on;
+    pillEl.classList.toggle("show", on);
+  },
+
+  // Called every frame from drawMesh. pts = null when no face is tracked.
+  draw(fallbackCtx, video, pts, w, h) {
+    const el = this.ensure();
+    const now = performance.now();
+    const dt = Math.min(0.1, (now - (this.lastDraw || now)) / 1000);
+    this.lastDraw = now;
+
+    let ctx = fallbackCtx;
+    if (el.layer && fitCanvasToVideo(el.layer, video)) {
+      ctx = el.layer.getContext("2d");
+      ctx.clearRect(0, 0, w, h);
+      el.layer.classList.add("on");
+    }
+
+    if (!State.phaseGate) this.bud = null;
+    this.placePill(pts, w, h, dt, ctx.canvas);
+  },
+
+  // Pill sits between lower lip (14) and chin (152), mapped from the
+  // stretched, mirrored canvas into screen pixels, smoothed and clamped.
+  placePill(pts, w, h, dt, canvas) {
+    const el = this.el;
+    const live = pts && State.phaseGate && !this.hidden && !State.paused;
+    if (!el.pill || !live || !pts[14] || !pts[152]) { this.setPillVisible(false); return; }
+
+    const ax = (pts[14].x + pts[152].x) / 2 * w;
+    const ay = (pts[14].y + pts[152].y) / 2 * h;
+    const box = (el.screen || canvas).getBoundingClientRect();
+    const crect = canvas.getBoundingClientRect();
+    let x = crect.left - box.left + (1 - ax / w) * canvas.clientWidth;
+    let y = crect.top - box.top + (ay / h) * canvas.clientHeight;
+
+    const inset = 16;
+    const pw = el.pill.offsetWidth, ph = el.pill.offsetHeight;
+    x = Math.min(box.width - inset - pw / 2, Math.max(inset + pw / 2, x));
+    let maxY = box.height - inset - ph;
+    const card = el.screen?.querySelector(".phase-copy");
+    if (card) maxY = Math.min(maxY, card.getBoundingClientRect().top - box.top - ph - 8);
+    y = Math.max(inset, Math.min(maxY, y));
+
+    const k = this.pill.x === null ? 1 : 1 - Math.exp(-dt / 0.12);
+    this.pill.x = this.pill.x === null ? x : this.pill.x + (x - this.pill.x) * k;
+    this.pill.y = this.pill.y === null ? y : this.pill.y + (y - this.pill.y) * k;
+    el.pill.style.left = this.pill.x.toFixed(1) + "px";
+    el.pill.style.top = this.pill.y.toFixed(1) + "px";
+    this.setPillVisible(true);
+  },
+};
+
 // Timer-paced active (original flow): used in Guided mode and for moves
 // MediaPipe cannot honestly observe (tongue, air, cheek draw-in, circles).
 function runActivePaced(move) {
@@ -1321,6 +1454,7 @@ function cycleCountFor(move) {
 // --- Self check overlay ---
 function showSelfCheck(move) {
   State.active = null;
+  Bloom.hide();
   setStageLabel("Done?");
   setPhaseVisual("done");
   document.getElementById("phaseCue").textContent = move.script.outroEn;
@@ -1359,11 +1493,13 @@ function handleSelfResult(status) {
 function pauseExercise(fromVisibility) {
   if (!State.session) return;
   State.paused = true;
+  Bloom.hide();
   document.getElementById("pauseOverlay").hidden = fromVisibility ? true : false;
   document.getElementById("pauseBtn").textContent = "▶";
 }
 function resumeExercise() {
   State.paused = false;
+  Bloom.show();
   document.getElementById("pauseOverlay").hidden = true;
   document.getElementById("pauseBtn").textContent = "II";
 }
@@ -1656,7 +1792,7 @@ function drawMesh(canvas, video, landmarks) {
   ctx.fillStyle = "#000";
   ctx.fillRect(0, 0, w, h);
 
-  if (!landmarks || !landmarks.length) return;
+  if (!landmarks || !landmarks.length) { Bloom.draw(ctx, video, null, w, h); return; }
   const pts = landmarks[0];
   const scale = Math.max(0.6, w / 640);
 
@@ -1717,6 +1853,7 @@ function drawMesh(canvas, video, landmarks) {
     drawPhaseTarget(ctx, pts, w, h, State.active.moveId, State.active.phase);
     drawPuckerGuide(ctx, pts, w, h, State.active.moveId, State.active.phase);
   }
+  Bloom.draw(ctx, video, pts, w, h);
 }
 
 // Draws a smooth curve through the landmark path using quadratic
@@ -2137,6 +2274,7 @@ window.FaceYoga = {
   easeOutCubic,
   targetGeometry,
   BLOOM_MOVES,
+  Bloom,
   async loadRoutine() {
     const res = await fetch("routine.v2.json");
     State.routine = await res.json();

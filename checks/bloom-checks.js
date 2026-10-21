@@ -32,6 +32,36 @@ export function hash() {
   return h;
 }
 
+// Same hand-placed face as test.js, for driving index.html without a camera.
+const MOCK_FACE = {
+  1: [0.50, 0.55], 10: [0.50, 0.21], 103: [0.33, 0.23], 332: [0.67, 0.23],
+  70: [0.30, 0.33], 300: [0.70, 0.33], 55: [0.44, 0.33], 285: [0.56, 0.33],
+  33: [0.33, 0.42], 263: [0.67, 0.42], 133: [0.44, 0.42], 362: [0.56, 0.42],
+  234: [0.22, 0.55], 454: [0.78, 0.55], 13: [0.50, 0.72], 14: [0.50, 0.76],
+  61: [0.42, 0.74], 291: [0.58, 0.74], 148: [0.42, 0.88], 377: [0.58, 0.88], 152: [0.50, 0.93],
+};
+
+export function mockFace(shiftY = 0) {
+  const arr = Array.from({ length: 478 }, () => ({ x: 0.5, y: 0.5 + shiftY, z: 0 }));
+  for (const [k, [x, y]] of Object.entries(MOCK_FACE)) arr[+k] = { x, y: y + shiftY, z: 0 };
+  return arr;
+}
+
+// index.html only: camera-mode session on move idx, skipping demo/ready.
+export function cameraMove(idx, shiftY = 0) {
+  const FY = window.FaceYoga;
+  if (!FY.State.session) FY.startSession("camera_assisted_candidate");
+  FY.State.mode = "camera_assisted_candidate";
+  document.querySelector("[data-screen='exercise']").classList.add("in-camera-mode");
+  document.getElementById("exerciseMesh").classList.add("on");
+  ["phase", "active", "demo", "ready", "rest"].forEach((k) => {
+    clearTimeout(FY.State.timers[k]); clearInterval(FY.State.timers[k]); FY.State.timers[k] = null;
+  });
+  FY.State.session.moveIndex = idx;
+  basePts = mockFace(shiftY);
+  FY.runActive(FY.State.routine.moves[idx]);
+}
+
 function startMove(idx) {
   document.getElementById("testMove").value = String(idx);
   try { document.getElementById("testStart").click(); } catch {}
