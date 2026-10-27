@@ -2,14 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
-  <meta name="theme-color" content="#07080c">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#faf7ef">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>Face Yoga</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500&family=Doto:wght@800&family=Inter:wght@500&display=swap" rel="stylesheet">
+  <title>FaceYogga · A little care</title>
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="onboarding.css">
 </head>
@@ -27,12 +24,12 @@
   <!-- ============ 1. WELCOME (19:184) ============ -->
   <section class="screen onb onb-welcome" data-screen="welcome" hidden>
     <div class="onb-welcome-visual" aria-hidden="true">
-      <img src="onboarding/assets/character.png" alt="" class="onb-welcome-character">
+      <div class="ritual-sculpture"><span></span><span></span><span></span></div>
     </div>
     <div class="onb-welcome-body">
       <span class="onb-brandline">FACE YOGA</span>
       <h1 class="onb-h1 onb-h1--large">Quietly care<br>for your face</h1>
-      <p class="onb-sub">A short, gentle break you follow along with. Setup<br>takes about two minutes.</p>
+      <p class="onb-sub">A short, gentle break you follow along with. Setup takes about two minutes.</p>
     </div>
     <button class="onb-btn-primary" data-action="onbStart">
       <span>Get started</span>
@@ -88,21 +85,21 @@
     </header>
     <h1 class="onb-h1"><span>A little</span><span class="dim">about you</span></h1>
 
-    <label class="onb-label">WHAT SHOULD WE CALL YOU</label>
+    <label class="onb-label" for="onbName">WHAT SHOULD WE CALL YOU</label>
     <input id="onbName" class="onb-input" type="text" placeholder="Mia" value="Mia" autocomplete="given-name">
 
     <label class="onb-label">FACE YOGA EXPERIENCE</label>
     <div class="onb-pill-row" id="onbExperience">
-      <button class="onb-pill onb-pill--pink is-selected" data-val="new">New</button>
-      <button class="onb-pill" data-val="some">Some</button>
-      <button class="onb-pill" data-val="regular">Regular</button>
+      <button class="onb-pill onb-pill--pink is-selected" data-val="new" aria-pressed="true">New</button>
+      <button class="onb-pill" data-val="some" aria-pressed="false">Some</button>
+      <button class="onb-pill" data-val="regular" aria-pressed="false">Regular</button>
     </div>
 
     <label class="onb-label">TIME EACH DAY</label>
     <div class="onb-pill-row" id="onbTime">
-      <button class="onb-pill" data-val="2">2 min</button>
-      <button class="onb-pill onb-pill--teal is-selected" data-val="4">4 min</button>
-      <button class="onb-pill" data-val="6">6 min</button>
+      <button class="onb-pill" data-val="2" aria-pressed="false">2 min</button>
+      <button class="onb-pill onb-pill--teal is-selected" data-val="4" aria-pressed="true">4 min</button>
+      <button class="onb-pill" data-val="6" aria-pressed="false">6 min</button>
     </div>
 
     <label class="onb-label">GENTLE REMINDER</label>
@@ -129,7 +126,7 @@
       <span class="onb-step">4/7</span>
     </header>
     <h1 class="onb-h1"><span>You're in</span><span class="dim">control</span></h1>
-    <p class="onb-sub">Your face is analysed on this phone. Nothing is<br>uploaded.</p>
+    <p class="onb-sub">Your face is analysed on this phone. Nothing is uploaded.</p>
 
     <div class="onb-toggles" id="onbToggles">
       <label class="onb-toggle">
@@ -227,8 +224,8 @@
       <div class="onb-progress" data-step="5"><span></span><span></span><span></span><span></span><span></span><span></span></div>
       <span class="onb-step">6/7</span>
     </header>
-    <h1 class="onb-h1"><span>Teach us</span><span class="dim">your moves</span></h1>
-    <p class="onb-sub">Hold each move for a moment.</p>
+    <h1 class="onb-h1"><span>Try these</span><span class="dim">gentle moves</span></h1>
+    <p class="onb-sub">Follow the illustrations. Your camera calibration comes before training.</p>
 
     <div class="onb-calib-stage">
       <video id="onbCalibVideo" playsinline autoplay muted></video>
@@ -237,9 +234,9 @@
         <svg viewBox="0 0 150 150" class="onb-calib-arc" aria-hidden="true">
           <defs>
             <linearGradient id="onbCalibGrad" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stop-color="#9be3e6"/>
-              <stop offset="50%" stop-color="#cda9cb"/>
-              <stop offset="100%" stop-color="#ff6fb0"/>
+              <stop offset="0%" stop-color="#898e46"/>
+              <stop offset="50%" stop-color="#b6b968"/>
+              <stop offset="100%" stop-color="#d6d35f"/>
             </linearGradient>
           </defs>
           <circle cx="75" cy="75" r="68" fill="none" stroke="rgba(255,255,255,.14)" stroke-width="4"/>
@@ -250,7 +247,8 @@
           <span class="onb-calib-hold">HOLD</span>
         </div>
       </div>
-      <p class="onb-calib-cue" id="onbCalibCue">Make a big smile, lips closed</p>
+      <div id="onbPoseDiagram" class="onb-pose-diagram"></div>
+      <p class="onb-calib-cue" id="onbCalibCue">Make a soft smile, lips closed</p>
     </div>
 
     <div class="onb-chip-row" id="onbCalibChips">
@@ -320,49 +318,45 @@
 
   <!-- ============ HOME ============ -->
   <section class="screen" data-screen="home" hidden>
-    <header class="topbar">
-      <span class="brand">Face Yoga</span>
+    <header class="topbar home-topbar">
+      <span class="sun-mark" aria-hidden="true">☼</span>
+      <span class="brand">faceyogga</span>
       <span class="date" id="homeDate">—</span>
     </header>
 
-    <article class="hero glass" id="streakHero">
-      <div class="hero-aurora" aria-hidden="true"></div>
+    <div class="home-intro">
+      <h1 class="hero-title">A little care,<br>just for you.</h1>
+      <span class="eyebrow">Your daily face ritual</span>
+      <p class="hero-sub">Seven gentle moves.<br>Four quiet minutes.</p>
+    </div>
+
+    <article class="hero glass ritual-card" id="streakHero">
       <div class="hero-top">
-        <span class="eyebrow">Today · Day <span id="streakDay">1</span></span>
-        <span class="pill pill-ghost" id="streakPill">first day</span>
-      </div>
-      <div class="hero-body">
-        <h1 class="hero-title">Quietly care<br>for your face</h1>
-        <p class="hero-sub">Seven moves, about 4–5 minutes. No scoring, just follow along.</p>
+        <span>Today · Day <span id="streakDay">1</span></span>
+        <span class="pill pill-ghost" id="streakPill">First day</span>
       </div>
       <button class="btn btn-primary" data-action="startSession">
-        <span>Start today's practice</span>
-        <span class="arrow">→</span>
+        <span>Begin today's practice</span><span class="arrow" aria-hidden="true">→</span>
       </button>
     </article>
 
-    <section class="tile-grid">
-      <article class="tile glass" aria-label="Weekly rhythm">
-        <span class="tile-label">This week</span>
-        <div class="weekdots" id="weekDots"></div>
-        <span class="tile-sub" id="weekSummary">Start your first</span>
-      </article>
-      <article class="tile glass" aria-label="Total sessions">
-        <span class="tile-label">Total</span>
-        <div class="tile-num"><span id="totalSessions">0</span><em>sessions</em></div>
-        <span class="tile-sub">completed</span>
-      </article>
+    <section class="flow-section" aria-labelledby="flowTitle">
+      <div class="flow-heading">
+        <div><h2 id="flowTitle">Today's flow</h2><p>7 moves · about 4 minutes</p></div>
+        <div class="flow-controls">
+          <button class="icon-btn" data-action="flowPrevious" aria-label="Previous moves">‹</button>
+          <button class="icon-btn" data-action="flowNext" aria-label="Next moves">›</button>
+        </div>
+      </div>
+      <ul class="moves-mini" id="movesPreviewHome" tabindex="0" aria-label="Today's seven moves"></ul>
     </section>
 
-    <article class="tile tile-wide glass">
-      <div class="tile-wide-head">
-        <span class="tile-label">Today's flow</span>
-        <span class="pill pill-ghost">7 moves · ~4 min</span>
-      </div>
-      <ul class="moves-mini" id="movesPreviewHome"></ul>
-    </article>
-
-    <p class="footnote">Video is processed on your phone. Nothing uploaded.</p>
+    <section class="weekly-ritual glass" aria-label="Weekly rhythm">
+      <div class="weekdots" id="weekDots"></div>
+      <div class="weekly-caption"><span id="weekSummary">Start your first</span><span><span id="totalSessions">0</span> sessions in total</span></div>
+    </section>
+    <p class="home-signoff">A moment for yourself, every day.</p>
+    <p class="footnote">Your practice stays on your device.</p>
   </section>
 
   <!-- ============ PREVIEW ============ -->
@@ -393,13 +387,13 @@
     </header>
 
     <h1 class="screen-title">Turn on the camera?</h1>
-    <p class="screen-sub">Both work. The camera is only your reflection — it does not score you in this build.</p>
+    <p class="screen-sub">Find your rhythm with gentle cues, or turn on your camera. Your video stays on your device.</p>
 
     <div class="mode-cards">
       <button class="mode-card glass" data-action="chooseCamera">
         <span class="mode-badge experimental">Experimental</span>
         <h3>Mirror mode</h3>
-        <p>Opens your front camera so you can see yourself.<br>Does not auto-count cycles or show accuracy.</p>
+        <p>Calibrate your comfortable range with illustrated steps.<br>Match lip movements; follow timed cues for the other moves.</p>
         <span class="mode-cta">Use camera →</span>
       </button>
       <button class="mode-card glass" data-action="chooseGuided">
@@ -437,31 +431,38 @@
     <header class="topbar">
       <button class="icon-btn" data-action="chooseCamera" aria-label="Restart">↺</button>
       <span class="brand">Calibrating</span>
-      <button class="icon-btn" data-action="skipCalibration" aria-label="Skip">↷</button>
+      <button class="icon-btn" data-action="skipCalibration" aria-label="Skip calibration and use timed guidance">↷</button>
     </header>
 
     <div class="calib-stage">
-      <div class="breath-ring" id="calibRing"></div>
       <div class="calib-copy">
-        <span class="eyebrow" id="calibStep">1 / 4</span>
+        <span class="eyebrow" id="calibStep">1 / 8 · your comfortable range</span>
         <h2 id="calibCue">Keep a relaxed, natural face</h2>
-        <p id="calibSub">2 seconds</p>
+        <p id="calibSub">Follow the illustration. Use a comfortable range.</p>
       </div>
+      <div id="calibIllustration" class="calib-illustration"></div>
+      <p class="mirror-note">Shown like a mirror · left means your own left</p>
+      <div class="calib-live-row">
+        <div class="calib-live"><video id="calibVideo" playsinline autoplay muted aria-hidden="true"></video><canvas id="calibMesh" class="mesh-canvas" aria-label="Your live face"></canvas></div>
+        <div class="calib-feedback"><span class="eyebrow">Your live pose</span><p id="calibStatus" role="status">Waiting for your face…</p><progress id="calibProgress" max="1" value="0" aria-label="Stable pose capture progress"></progress></div>
+      </div>
+      <button class="btn btn-ghost small" data-action="skipCalibration">Use timed guidance instead</button>
     </div>
 
-    <p class="footnote">Calibration data stays on your phone.</p>
+    <p class="footnote">Only comfortable movements. Samples stay in memory for this session.</p>
   </section>
 
   <!-- ============ EXERCISE ============ -->
   <section class="screen screen-exercise" data-screen="exercise" hidden>
-    <video id="exerciseVideo" playsinline autoplay muted></video>
-    <canvas id="exerciseMesh" class="mesh-canvas mesh-canvas-soft"></canvas>
+    <video id="exerciseVideo" aria-hidden="true" playsinline autoplay muted></video>
+    <canvas id="exerciseMesh" aria-hidden="true" class="mesh-canvas mesh-canvas-soft"></canvas>
     <div class="sticker-layer" id="exerciseStickers" aria-hidden="true"></div>
     <div class="exercise-dim" aria-hidden="true"></div>
 
     <header class="topbar topbar-exercise">
       <button class="icon-btn glass-chip" data-action="togglePause" id="pauseBtn" aria-label="Pause">II</button>
       <div class="session-progress">
+        <span class="session-mode" id="sessionMode">Guided practice</span>
         <span class="eyebrow"><span id="moveIndex">1</span> / 7</span>
         <div class="progress-track"><div class="progress-fill" id="sessionProgress"></div></div>
       </div>
@@ -482,16 +483,19 @@
       <div class="phase-copy">
         <span class="pill" id="stageLabel">Ready</span>
         <h2 class="phase-cue" id="phaseCue">—</h2>
-        <p class="phase-sub" id="phaseSub">—</p>
+        <div id="moveGuide" class="move-guide" hidden></div>
+        <p class="phase-sub" id="phaseSub" role="status">—</p>
+        <div id="holdFeedback" class="hold-feedback" hidden><span id="holdLabel">Hold gently · 0.0 / 1.0 s</span><progress id="holdProgress" max="1" value="0" aria-label="Continuous hold progress"></progress></div>
       </div>
 
       <div class="rhythm-dots" id="rhythmDots"></div>
     </div>
 
     <footer class="exercise-footer">
+      <p class="exercise-reassurance">Move at your own pace</p>
       <button class="btn btn-ghost small" data-action="replayDemo">Replay demo</button>
       <button class="btn btn-ghost small" data-action="skipMove">Skip</button>
-      <button class="audio-toggle" data-action="toggleSound" id="soundToggle" aria-label="toggle sound">♪</button>
+      <button class="audio-toggle" data-action="toggleSound" id="soundToggle" aria-label="Toggle sound" aria-pressed="false">♪</button>
     </footer>
 
     <div class="selfcheck glass" id="selfcheck" hidden>
@@ -511,7 +515,7 @@
     </div>
 
     <div class="demo-overlay" id="demoOverlay" hidden>
-      <div class="demo-ring"></div>
+      <div id="demoIllustrations" class="demo-illustrations"></div>
       <span class="eyebrow">Demo</span>
       <h3 id="demoTitle">—</h3>
       <p id="demoCue">—</p>

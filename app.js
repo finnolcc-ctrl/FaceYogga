@@ -1,12 +1,15 @@
 // Face Yoga MVP — Guided-first prototype.
 // Spec: CLAUDE_HANDOFF v0.2 + routine.v2.json.
-// Camera-assisted mode is intentionally labelled "experimental" and does NOT
-// drive scoring or cycle counting in this build.
+// Camera matching uses per-session calibration; uncalibrated moves stay guided.
 
 import {
   FaceLandmarker,
   FilesetResolver,
 } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.1.0/vision_bundle.mjs";
+
+import { measureFace, medianSample, calibrationIssue, samplesAreStable, canMatch,
+  evaluatePose, advanceHold, containTransform } from "./tracking.mjs";
+import { POSES, CALIBRATION_STEPS, mouthDiagram, calibrationDiagram, guideKey, guideSequence } from "./guidance.mjs";
 
 const STORAGE_KEY = "faceyoga.v2";
 const MP_VERSION = "1.1.0";
@@ -14,7 +17,7 @@ const MODEL_URL  = "https://storage.googleapis.com/mediapipe-models/face_landmar
 
 // =====================================================
 // FACE MODEL — line-art portrait
-// Camera video is hidden; the canvas paints pure black
+// Camera video is hidden; the canvas paints warm ivory
 // and draws a refined hairline-contour face.
 //   - face oval (whisper-thin)
 //   - brows + nose bridge (thin)
@@ -126,6 +129,10 @@ const State = {
   observations: null,                                 // { matchedMs, smileWarmth, samples }
   phaseGate: null,                                    // active detection-gated phase state
   lastLandmarks: null,                                // most recent faceLandmarks for detection logic
+  calibration: null,
+  calibrationRun: null,
+  frameSize: { width: 640, height: 480 },
+  lastFrameAt: 0,
   paused: false,
   wakeLock: null,
 };
@@ -144,6 +151,7 @@ async function init() {
   State.routine = await res.json();
 
   bindActions();
+  bindExerciseDialogs();
   renderHome();
   renderPreviewList();
   bootOnboarding();
@@ -278,7 +286,11 @@ function toggleGoal(key, btn) {
 function pickPill(groupId, val) {
   const group = document.getElementById(groupId);
   if (!group) return;
-  group.querySelectorAll(".onb-pill").forEach((p) => p.classList.toggle("is-selected", p.dataset.val === String(val)));
+  group.querySelectorAll(".onb-pill").forEach((p) => {
+    const selected = p.dataset.val === String(val);
+    p.classList.toggle("is-selected", selected);
+    p.setAttribute("aria-pressed", String(selected));
+  });
 }
 
 // Face-scan — attaches live camera into the stage, walks fake percent to 100,
@@ -312,7 +324,7 @@ async function startFaceScan() {
 
 // Calibration countdown — 3 → 2 → 1 → next pose
 const CALIB_POSES = [
-  { move: "smile", cue: "Make a big smile, lips closed" },
+  { move: "smile", cue: "Make a soft smile, lips closed" },
   { move: "brow",  cue: "Lift your brows gently" },
   { move: "cheek", cue: "Puff your cheeks softly" },
 ];
@@ -333,6 +345,7 @@ function stepCalibPose() {
   const arcEl   = document.getElementById("onbCalibArc");
   if (!pose || !countEl) return;
   cueEl.textContent = pose.cue;
+  document.getElementById("onbPoseDiagram").innerHTML = mouthDiagram(pose.move);
   document.querySelectorAll("#onbCalibChips .onb-chip").forEach((c) => {
     const done = CALIB_POSES.slice(0, State.onbCalibIdx + 1).some((p) => p.move === c.dataset.move);
     c.classList.toggle("onb-chip--done", done);
@@ -377,14 +390,57 @@ function bindActions() {
   });
 }
 
+// Keep modal controls reachable by keyboard without focusing the exercise behind them.
+function bindExerciseDialogs() {
+  const screen = document.querySelector('[data-screen="exercise"]');
+  const dialogs = [...screen.querySelectorAll('.selfcheck, .pause-overlay, .demo-overlay')];
+  let current = null;
+  let returnFocus = null;
+  function sync() {
+    const next = screen.hidden ? null : dialogs.find((dialog) => !dialog.hidden);
+    if (next === current) return;
+    if (!current && next) returnFocus = document.activeElement;
+    current = next;
+    screen.querySelectorAll('.topbar-exercise, .exercise-body, .exercise-footer').forEach((el) => {
+      el.inert = Boolean(current);
+    });
+    if (current) current.querySelector('button')?.focus({ preventScroll: true });
+    else if (returnFocus?.isConnected && returnFocus.getClientRects().length) returnFocus.focus({ preventScroll: true });
+  }
+  dialogs.forEach((dialog) => {
+    dialog.setAttribute('role', 'dialog');
+    dialog.setAttribute('aria-modal', 'true');
+    const title = dialog.querySelector('h3');
+    if (!title.id) title.id = dialog.id + 'Title';
+    dialog.setAttribute('aria-labelledby', title.id);
+    new MutationObserver(sync).observe(dialog, { attributes: true, attributeFilter: ['hidden'] });
+  });
+  new MutationObserver(sync).observe(screen, { attributes: true, attributeFilter: ['hidden'] });
+  screen.addEventListener('keydown', (event) => {
+    if (!current) return;
+    if (event.key === 'Escape' && current.id !== 'selfcheck') {
+      event.preventDefault();
+      if (current.id === 'demoOverlay') hideDemoOverlay(); else resumeExercise();
+    }
+    if (event.key === 'Tab') {
+      const buttons = [...current.querySelectorAll('button:not(:disabled)')];
+      const first = buttons[0], last = buttons.at(-1);
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    }
+  });
+}
+
 const Actions = {
   startSession:   () => { renderPreviewList(); show("preview"); },
+  flowPrevious:  () => scrollFlow(-1),
+  flowNext:      () => scrollFlow(1),
   goHome:         () => { teardownExercise(); show("home"); renderHome(); },
   toPreview:      () => show("preview"),
-  toCameraChoice: () => show("cameraChoice"),
+  toCameraChoice: () => { stopCamera(); show("cameraChoice"); },
   chooseGuided:   () => { State.mode = "guided"; stopCamera(); startSession("guided"); },
   chooseCamera:   () => beginCameraSetup(),
-  skipCalibration:() => { stopCalibration(); startSession("camera_assisted_candidate"); },
+  skipCalibration:() => { stopCalibration(); State.calibration = null; startSession("camera_assisted_candidate"); },
   togglePause:    () => (State.paused ? resumeExercise() : pauseExercise(false)),
   resume:         () => resumeExercise(),
   endSession:     () => endSessionConfirm(),
@@ -397,6 +453,7 @@ const Actions = {
   toggleSound:    () => {
     AudioEngine.setEnabled(!AudioEngine.enabled);
     document.getElementById("soundToggle")?.classList.toggle("on", AudioEngine.enabled);
+    document.getElementById("soundToggle")?.setAttribute("aria-pressed", String(AudioEngine.enabled));
     if (AudioEngine.enabled) AudioEngine.tone(660, 120, "sine", 0.08);
   },
 
@@ -458,6 +515,12 @@ document.addEventListener("change", (e) => {
 // =========================================================
 // HOME
 // =========================================================
+function scrollFlow(direction) {
+  const list = document.getElementById("movesPreviewHome");
+  list.scrollBy({ left: direction * list.clientWidth * .85,
+    behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
+}
+
 function renderHome() {
   const data = loadStore();
   const streak = data.streak || 0;
@@ -477,6 +540,8 @@ function renderHome() {
     const d = new Date(today); d.setDate(d.getDate() - i);
     const span = document.createElement("span");
     span.className = "d";
+    span.textContent = d.toLocaleDateString("en-US", { weekday: "narrow" });
+    span.setAttribute("aria-label", `${formatDate(d)}${activeDates.has(iso(d)) ? ", practiced" : ", no practice"}${i === 0 ? ", today" : ""}`);
     if (activeDates.has(iso(d))) span.classList.add("on");
     if (i === 0) span.classList.add("today");
     dotsEl.appendChild(span);
@@ -492,7 +557,12 @@ function renderHome() {
   list.innerHTML = "";
   State.routine.moves.forEach((m) => {
     const li = document.createElement("li");
-    li.innerHTML = `<span class="idx">${m.order}</span><span>${m.title.en}</span><span class="dur">${Math.round(m.activeMs/1000)}s</span>`;
+    li.innerHTML = `<button class="move-preview" data-action="startSession" aria-label="View routine: ${m.title.en}">
+      <span class="idx">${String(m.order).padStart(2, "0")}</span>
+      <span class="move-art" aria-hidden="true"></span>
+      <span class="move-name">${m.title.en}</span>
+      <span class="dur">${Math.round(m.activeMs/1000)} seconds</span>
+    </button>`;
     list.appendChild(li);
   });
 }
@@ -519,6 +589,9 @@ function renderPreviewList() {
 // CAMERA SETUP + CALIBRATION
 // =========================================================
 async function beginCameraSetup() {
+  stopCamera();
+  State.calibration = null;
+  State.blendshapes = {};
   show("setup");
   const statusEl = document.getElementById("setupStatus");
   const videoEl  = document.getElementById("setupVideo");
@@ -565,9 +638,8 @@ function runSetupLoop(videoEl, statusEl, ovalEl) {
       lastVidTime = videoEl.currentTime;
       try {
         const res = State.landmarker.detectForVideo(videoEl, performance.now());
-        State.lastLandmarks = res.faceLandmarks;
+        recordTrackingFrame(res, videoEl);
         const hasFace = res.faceLandmarks?.length > 0;
-        readBlendshapes(res);
         updateAurora();
         drawMesh(meshEl, videoEl, res.faceLandmarks);
         Stickers.setup.update(res.faceLandmarks, meshEl);
@@ -581,7 +653,7 @@ function runSetupLoop(videoEl, statusEl, ovalEl) {
           } else {
             statusEl.textContent = "Looking good — calibrating next";
             cancelAnimationFrame(State.timers.setup);
-            setTimeout(() => beginCalibration(), 500);
+            State.timers.setup = setTimeout(() => beginCalibration(), 500);
             return;
           }
         } else {
@@ -616,56 +688,138 @@ function runExerciseMeshLoop() {
       lastVidTime = videoEl.currentTime;
       try {
         const res = State.landmarker.detectForVideo(videoEl, performance.now());
-        State.lastLandmarks = res.faceLandmarks;
-        readBlendshapes(res);
+        recordTrackingFrame(res, videoEl);
         updateAurora();
         advanceGate();
         drawMesh(meshEl, videoEl, res.faceLandmarks);
         Stickers.exercise.update(res.faceLandmarks, meshEl);
         if (res.faceLandmarks?.length) meshEl.classList.add("on");
         else meshEl.classList.remove("on");
-      } catch {}
+      } catch {
+        State.lastLandmarks = null;
+        State.blendshapes = {};
+      }
+    }
+    if (performance.now()-State.lastFrameAt > 250) {
+      meshEl.classList.remove("on");
+      if (State.phaseGate) {
+        State.phaseGate.fill = 0;
+        renderHoldProgress();
+        if (!State.paused) document.getElementById("phaseSub").textContent = "Tracking paused — bring your face into view.";
+      }
     }
   };
   tick();
 }
 
-// Calibration: 4 timed steps with breath ring. For MVP we record a marker
-// but do NOT drive detection off these samples.
+// Calibration records comfortable poses only while the face is visible and stable.
+// Samples live in memory for this session; no image or face template is persisted.
 function beginCalibration() {
+  stopCalibration();
+  State.calibration = null;
   show("calibration");
-  const steps = [
-    { label: "1 / 4", cue: "Keep a relaxed natural face", sub: "2 seconds · neutral" },
-    { label: "2 / 4", cue: "Open your mouth for A",       sub: "2 seconds · no sound" },
-    { label: "3 / 4", cue: "Round your lips for U",       sub: "2 seconds · gently" },
-    { label: "4 / 4", cue: "Widen the corners for E",     sub: "2 seconds · no clenching" },
-  ];
-  let i = 0;
-  const run = () => {
-    if (i >= steps.length) {
-      saveStore((d) => { d.lastCalibrationAt = new Date().toISOString(); });
-      startSession("camera_assisted_candidate");
+  const video = document.getElementById("calibVideo");
+  video.srcObject = State.cameraStream;
+  video.play().catch(() => {});
+  const run = { index: 0, profile: {}, frames: [], heldFrom: 0, lastTime: -1, lastFrameAt: 0, readyAt: 0 };
+  State.calibrationRun = run;
+  const present = () => {
+    const key = CALIBRATION_STEPS[run.index];
+    document.getElementById("calibStep").textContent = `${run.index+1} / ${CALIBRATION_STEPS.length} · your comfortable range`;
+    document.getElementById("calibCue").textContent = POSES[key].title;
+    document.getElementById("calibSub").textContent = POSES[key].detail;
+    document.getElementById("calibIllustration").innerHTML = calibrationDiagram(key);
+    document.getElementById("calibStatus").textContent = "Try the illustrated pose, then hold gently.";
+    document.getElementById("calibProgress").value = 0;
+    run.readyAt = performance.now()+800;
+    run.frames = []; run.heldFrom = 0;
+  };
+  present();
+  const tick = () => {
+    if (State.calibrationRun !== run) return;
+    State.timers.calibration = requestAnimationFrame(tick);
+    const now = performance.now();
+    if (video.readyState < 2 || video.currentTime === run.lastTime) {
+      if (now-run.lastFrameAt > 500) {
+        run.frames = []; run.heldFrom = 0;
+        document.getElementById("calibProgress").value = 0;
+        document.getElementById("calibStatus").textContent = "Waiting for the camera. You can also continue with guided practice.";
+      }
       return;
     }
-    document.getElementById("calibStep").textContent = steps[i].label;
-    document.getElementById("calibCue").textContent  = steps[i].cue;
-    document.getElementById("calibSub").textContent  = steps[i].sub;
-    i++;
-    State.timers.setup = setTimeout(run, 2200);
+    run.lastTime = video.currentTime;
+    if (now-run.lastFrameAt > 250 || document.hidden) { run.frames = []; run.heldFrom = 0; }
+    run.lastFrameAt = now;
+    try {
+      const result = State.landmarker.detectForVideo(video, now);
+      recordTrackingFrame(result, video);
+      const canvas = document.getElementById("calibMesh");
+      drawMesh(canvas, video, result.faceLandmarks);
+      canvas.classList.toggle("on", !!result.faceLandmarks?.length);
+      if (now < run.readyAt || document.hidden) return;
+      const face = currentFace();
+      const key = CALIBRATION_STEPS[run.index];
+      const issue = calibrationIssue(key, face, run.profile);
+      const status = document.getElementById("calibStatus");
+      if (issue) {
+        run.frames = []; run.heldFrom = 0;
+        document.getElementById("calibProgress").value = 0;
+        status.textContent = issue;
+        return;
+      }
+      if (!run.heldFrom) run.heldFrom = now;
+      run.frames.push(face);
+      const progress = Math.min(1, (now-run.heldFrom)/1200);
+      document.getElementById("calibProgress").value = progress;
+      status.textContent = `Hold gently · ${Math.min(1.2, Math.floor((now-run.heldFrom)/100)/10).toFixed(1)} / 1.2 s`;
+      if (progress < 1) return;
+      if (!samplesAreStable(run.frames)) {
+        run.frames = []; run.heldFrom = 0;
+        status.textContent = "Almost — settle into the pose and hold still.";
+        return;
+      }
+      run.profile[key] = medianSample(run.frames);
+      run.index++;
+      if (run.index === CALIBRATION_STEPS.length) {
+        State.calibration = run.profile;
+        stopCalibration();
+        startSession("camera_assisted_candidate");
+      } else present();
+    } catch (error) {
+      run.frames = []; run.heldFrom = 0;
+      document.getElementById("calibProgress").value = 0;
+      document.getElementById("calibStatus").textContent = "Tracking interrupted. Retry calibration or continue with guided practice.";
+    }
   };
-  run();
+  tick();
 }
-
 function stopCalibration() {
+  State.calibrationRun = null;
+  cancelAnimationFrame(State.timers.calibration);
   clearTimeout(State.timers.setup);
+  cancelAnimationFrame(State.timers.setup);
 }
-
 function stopCamera() {
+  stopCalibration();
   if (State.cameraStream) {
-    State.cameraStream.getTracks().forEach((t) => t.stop());
+    State.cameraStream.getTracks().forEach(t => t.stop());
     State.cameraStream = null;
   }
-  cancelAnimationFrame(State.timers.setup);
+  cancelAnimationFrame(State.timers.mesh);
+  State.calibration = null;
+  State.lastLandmarks = null;
+  State.blendshapes = {};
+  State.lastFrameAt = 0;
+}
+function recordTrackingFrame(result, video) {
+  State.lastLandmarks = result.faceLandmarks;
+  State.frameSize = { width: video.videoWidth, height: video.videoHeight };
+  State.lastFrameAt = performance.now();
+  readBlendshapes(result);
+}
+function currentFace() {
+  if (performance.now()-State.lastFrameAt > 250) return null;
+  return measureFace(State.lastLandmarks?.[0], State.blendshapes, State.frameSize.width, State.frameSize.height);
 }
 
 // =========================================================
@@ -696,6 +850,7 @@ function startSession(mode) {
 
   // Camera visible as a soft mirror backdrop if camera mode
   const exerciseScreen = document.querySelector("[data-screen='exercise']");
+  document.getElementById("sessionMode").textContent = mode === "guided" ? "Guided practice" : State.calibration ? "Calibrated practice" : "Mirror · timed guidance";
   const vid = document.getElementById("exerciseVideo");
   if (mode === "camera_assisted_candidate" && State.cameraStream) {
     vid.srcObject = State.cameraStream;
@@ -743,6 +898,7 @@ function clearPhaseTimers() {
   });
   State.active = null;
   State.phaseGate = null;
+  renderHoldProgress();
 }
 
 function nextMove() {
@@ -769,6 +925,8 @@ function updateSessionProgress() {
 // --- Demo phase ---
 function runDemo(move) {
   const demoMs = State.routine.defaults.demoMs;
+  renderMoveGuide(move.id, move.phaseSchedule[0].phase);
+  renderHoldProgress();
   setStageLabel("Demo");
   document.getElementById("phaseCue").textContent = move.title.en;
   document.getElementById("phaseSub").textContent = move.script.introEn;
@@ -801,7 +959,7 @@ function runReady(move) {
 // --- Active phase: router between detection-gated and timer-paced flows ---
 const DETECTION_MOVES = new Set(["vowel_a_u", "vowel_e_u", "pucker_side_to_side", "pucker_circles"]);
 function usesDetection(moveId) {
-  return State.mode === "camera_assisted_candidate" && DETECTION_MOVES.has(moveId);
+  return State.mode === "camera_assisted_candidate" && canMatch(moveId, State.calibration);
 }
 // Reps per detected move: deliberately shorter than timer-based repeat so the
 // gameplay doesn't take forever when every rep needs a real snap.
@@ -845,28 +1003,18 @@ function runActiveDetection(move) {
   };
   stepGatedPhase();
 
-  // Soft safety: 2× the planned active time. If stuck we mark the
-  // move as partial (gracefully honest), flash a quiet checkmark,
-  // and continue to the next move so the ritual flows.
-  const maxMs = (move.activeMs || 20000) * 2;
-  State.timers.active = setTimeout(() => {
-    if (State.phaseGate) {
-      moveState.activeElapsedMs = performance.now() - State.phaseGate.startTime;
-      moveState.status = moveState.status === "not_started"
-        ? (State.phaseGate.reps > 0 ? "partial" : "skipped")
-        : moveState.status;
-      moveState.endedAt = new Date().toISOString();
-      State.phaseGate = null;
-      State.active = null;
-      autoAdvance();
-    }
-  }, maxMs);
+  // Count active camera time, not wall-clock time, so pause/replay cannot expire a move.
+  State.phaseGate.elapsedMs = 0;
+  State.phaseGate.maxMs = Math.max(60000, (move.activeMs || 20000)*3);
 }
 
 function stepGatedPhase() {
   const g = State.phaseGate;
   if (!g) return;
-  const p = g.phases[g.phaseIdx % g.phases.length];
+  const phaseInCycle = g.phaseIdx % g.phases.length;
+  const reverse = State.routine.moves.find(m => m.id === g.moveId)?.reversePhaseOrder;
+  const p = g.moveId === "pucker_circles" && reverse && g.reps >= g.requiredReps/2
+    ? g.phases.find(p => p.phase === reverse[phaseInCycle]) : g.phases[phaseInCycle];
   State.active = { moveId: g.moveId, phase: p.phase };
   g.fill = 0;
   g.peakPrecision = 0;
@@ -875,217 +1023,71 @@ function stepGatedPhase() {
   g.lastBucket = null;
   g.lastOvershoot = null;
   document.getElementById("phaseCue").textContent = p.cue.en;
-  document.getElementById("phaseSub").textContent = pickFromBank(FEEDBACK_BANKS.waiting);
+  document.getElementById("phaseSub").textContent = "Follow the shape below, then hold gently.";
+  renderMoveGuide(g.moveId, p.phase);
+  renderHoldProgress();
   setPhaseVisual(phaseVisualFor(g.moveId, p.phase));
 }
 
-// Legacy wrapper for drawPhaseTarget outline coloring — just precision now.
-function matchForActivePhase() {
-  return evaluatePrecision()?.precision || 0;
-}
-
-// Soft-band precision: 1.0 at ideal, 0 beyond hard tolerance. Symmetric
-// around the ideal so both under- and over-shoot cost quality.
-function softPrecision(value, ideal, soft, hard) {
-  const diff = Math.abs(value - ideal);
-  if (diff <= soft) return 1 - (diff / soft) * 0.25;    // 1.0 → 0.75 across the soft band
-  if (diff >= hard) return 0;
-  return 0.75 * (1 - (diff - soft) / (hard - soft));
-}
-
-// Ramp-and-hold precision: for positional measures where "reach the target"
-// matters. Below `start` = 0, climbs to 1.0 at `ideal`, stays 1.0 up to
-// `overLimit`, then falls off.
-function rampPrecision(value, start, ideal, overLimit) {
-  if (value < start) return 0;
-  if (value < ideal) return (value - start) / (ideal - start);
-  if (value < overLimit) return 1;
-  return Math.max(0, 1 - (value - overLimit) / 0.08);
-}
-
-// Per-phase precision targets. Blend-based for vowel moves; combined
-// pucker-intensity × lip-position for the pucker moves.
-const PRECISION_TARGETS = {
-  "vowel_a_u:a":  { kind: "blend", bs: "jawOpen",         ideal: 0.35, soft: 0.08, hard: 0.18, hintKey: "jawOpen" },
-  "vowel_a_u:u":  { kind: "blend", bs: "mouthPucker",     ideal: 0.50, soft: 0.10, hard: 0.22, hintKey: "mouthPucker" },
-  "vowel_e_u:u":  { kind: "blend", bs: "mouthPucker",     ideal: 0.50, soft: 0.10, hard: 0.22, hintKey: "mouthPucker" },
-  "vowel_e_u:e":  { kind: "blend-avg", bs: ["mouthSmileLeft","mouthSmileRight"], ideal: 0.33, soft: 0.08, hard: 0.18, hintKey: "mouthSmile" },
-  "pucker_side_to_side:left":  { kind: "pucker-lateral", sign:  1 },
-  "pucker_side_to_side:right": { kind: "pucker-lateral", sign: -1 },
-  "pucker_circles:left":  { kind: "pucker-quadrant", axis: "x", sign:  1 },
-  "pucker_circles:right": { kind: "pucker-quadrant", axis: "x", sign: -1 },
-  "pucker_circles:up":    { kind: "pucker-quadrant", axis: "y", sign: -1 },
-  "pucker_circles:down":  { kind: "pucker-quadrant", axis: "y", sign:  1 },
-};
-
 function evaluatePrecision() {
   const a = State.active;
-  if (!a) return null;
-  const target = PRECISION_TARGETS[a.moveId + ":" + a.phase];
-  if (!target) return null;
-  const bs = State.blendshapes;
-  const pts = State.lastLandmarks?.[0];
-
-  if (target.kind === "blend") {
-    const value = bs[target.bs] || 0;
-    return {
-      precision: softPrecision(value, target.ideal, target.soft, target.hard),
-      direction: value - target.ideal,
-      hintKey: target.hintKey,
-    };
-  }
-  if (target.kind === "blend-avg") {
-    const value = target.bs.reduce((s, k) => s + (bs[k] || 0), 0) / target.bs.length;
-    return {
-      precision: softPrecision(value, target.ideal, target.soft, target.hard),
-      direction: value - target.ideal,
-      hintKey: target.hintKey,
-    };
-  }
-  if (target.kind === "pucker-lateral") {
-    if (!pts) return null;
-    const puckerVal = bs.mouthPucker || 0;
-    const puckerPrec = softPrecision(puckerVal, 0.45, 0.15, 0.3);
-    const d = lipDeviation(pts);
-    if (!d) return null;
-    const axisValue = d.dx * target.sign;
-    const posPrec = rampPrecision(axisValue, 0.04, 0.11, 0.2);
-    return {
-      precision: puckerPrec * posPrec,
-      direction: axisValue - 0.11,
-      hintKey: puckerPrec < posPrec ? "mouthPucker" : "position",
-    };
-  }
-  if (target.kind === "pucker-quadrant") {
-    if (!pts) return null;
-    const puckerVal = bs.mouthPucker || 0;
-    const puckerPrec = softPrecision(puckerVal, 0.45, 0.15, 0.3);
-    const d = lipDeviation(pts);
-    if (!d) return null;
-    const axisValue = (target.axis === "x" ? d.dx : d.dy) * target.sign;
-    const ideal = target.axis === "x" ? 0.09 : 0.055;
-    const posPrec = rampPrecision(axisValue, 0.025, ideal, ideal + 0.07);
-    return {
-      precision: puckerPrec * posPrec,
-      direction: axisValue - ideal,
-      hintKey: puckerPrec < posPrec ? "mouthPucker" : "position",
-    };
-  }
-  return null;
+  return a ? evaluatePose(a.moveId, a.phase, currentFace(), State.calibration) : null;
 }
-
-// --- Lively feedback copy ---
-const FEEDBACK_BANKS = {
-  waiting: ["ready when you are", "take a breath", "soft start"],
-  far:     ["going there", "a bit more", "finding it"],
-  closer:  ["closer…", "almost", "just a little more"],
-  good:    ["nice, hold", "steady", "stay with it", "yes"],
-  perfect: ["beautiful", "exactly", "perfect", "hold it there"],
-};
-const UNDER_HINTS = {
-  jawOpen:     ["open a touch wider", "gently open more"],
-  mouthPucker: ["round the lips more", "pucker gently in"],
-  mouthSmile:  ["widen the corners", "corners out"],
-  position:    ["drift it that way", "slide a bit further"],
-};
-const OVER_HINTS = {
-  jawOpen:     ["softer", "ease it back"],
-  mouthPucker: ["ease the pucker", "soft round, not tight"],
-  mouthSmile:  ["gentle, not forced"],
-  position:    ["slow back toward center", "softer, don't push"],
-};
-
-function pickFromBank(bank) {
-  return bank[Math.floor(Math.random() * bank.length)];
-}
-
 function updateFeedback(precision, result) {
-  const g = State.phaseGate;
-  if (!g || !result) return;
-  let bucket;
-  if (precision < 0.08) bucket = "waiting";
-  else if (precision < 0.3) bucket = "far";
-  else if (precision < 0.6) bucket = "closer";
-  else if (precision < 0.85) bucket = "good";
-  else bucket = "perfect";
-
-  // Over-shoot nudge takes precedence when they're off the mark and above the ideal
-  const overshoot = (result.direction || 0) > 0 && precision < 0.7;
-
-  // Only re-pick copy when the bucket actually changes (prevents flicker).
-  if (bucket === g.lastBucket && overshoot === g.lastOvershoot) return;
-  g.lastBucket = bucket;
-  g.lastOvershoot = overshoot;
-
-  let text;
-  if (bucket === "waiting" || bucket === "far") {
-    const hintSet = overshoot ? OVER_HINTS : UNDER_HINTS;
-    text = pickFromBank(hintSet[result.hintKey] || hintSet.position);
-  } else if (bucket === "closer" && overshoot) {
-    text = pickFromBank(OVER_HINTS[result.hintKey] || OVER_HINTS.position);
-  } else {
-    text = pickFromBank(FEEDBACK_BANKS[bucket]);
-  }
-
-  const subEl = document.getElementById("phaseSub");
-  if (subEl) subEl.textContent = text;
-
-  // Play a soft audio bump when crossing into "good" or "perfect".
-  if ((bucket === "good" || bucket === "perfect") && g.lastSoundBucket !== bucket) {
-    AudioEngine.transition(bucket === "perfect" ? 660 : 494);
-    g.lastSoundBucket = bucket;
-  }
-  if (bucket === "far" || bucket === "waiting") g.lastSoundBucket = null;
+  const el = document.getElementById("phaseSub");
+  if (el && result) el.textContent = result.hint;
 }
-
-// Lip center deviation from nose, normalized by eye distance.
-// dx > 0 means lips moved toward the user's own LEFT (camera's right).
-function lipDeviation(pts) {
-  const nose = pts[1], upperLip = pts[13], lowerLip = pts[14];
-  const lipL = pts[61], lipR = pts[291];
-  const eyeL = pts[33], eyeR = pts[263];
-  if (!nose || !upperLip || !lowerLip || !lipL || !lipR || !eyeL || !eyeR) return null;
-  const eyeDistX = Math.abs(eyeR.x - eyeL.x) || 0.001;
-  const lipCX = (lipL.x + lipR.x) / 2;
-  const lipCY = (upperLip.y + lowerLip.y) / 2;
-  const dx = (lipCX - nose.x) / eyeDistX;
-  // Vertical reference: estimate neutral lip Y as a fixed proportion below nose
-  const neutralY = nose.y + eyeDistX * 0.35;
-  const dy = (lipCY - neutralY) / eyeDistX;
-  return { dx, dy, lipCX, lipCY, noseX: nose.x, noseY: nose.y, eyeDistX };
+function renderMoveGuide(moveId, phase) {
+  const key = guideKey(moveId, phase);
+  const el = document.getElementById("moveGuide");
+  if (el) {
+    el.hidden = !key;
+    el.innerHTML = key ? `${mouthDiagram(key)}<div><span class="eyebrow">${POSES[key].label}</span><p>${POSES[key].detail}</p></div>` : "";
+  }
+  document.getElementById("phaseStage")?.classList.toggle("has-guide", !!key && !!el);
+}
+function renderHoldProgress() {
+  const g = State.phaseGate;
+  const wrap = document.getElementById("holdFeedback");
+  if (!wrap) return;
+  wrap.hidden = !g;
+  if (g) {
+    document.getElementById("holdProgress").value = g.fill;
+    document.getElementById("holdLabel").textContent = `Hold gently · ${(Math.floor(g.fill*10)/10).toFixed(1)} / 1.0 s`;
+  }
 }
 
 function advanceGate() {
   const g = State.phaseGate;
-  if (!g || State.paused) { if (g) g.lastTick = performance.now(); return; }
+  if (!g) return;
   const now = performance.now();
-  const dt = Math.min(0.1, (now - g.lastTick) / 1000);
+  const elapsed = now-g.lastTick;
   g.lastTick = now;
-
+  if (State.paused) { g.fill = 0; renderHoldProgress(); return; }
+  g.elapsedMs += Math.min(250, elapsed);
   const result = evaluatePrecision();
   const precision = result?.precision || 0;
-
-  // Track peak precision this rep so we can award petals at snap time.
-  if (precision > (g.peakPrecision || 0)) g.peakPrecision = precision;
-
-  const MIN_FILL = 0.3;          // precision below this = drain
-  const FILL_TIME = 1.1;         // seconds at precision 1 to fill
-  const DRAIN_TIME = 1.4;        // seconds to fully drain
-
-  if (precision >= MIN_FILL) {
-    g.fill = Math.min(1, g.fill + (precision * dt) / FILL_TIME);
-    if (State.observations) State.observations.matchedMs += dt * 1000;
-  } else {
-    g.fill = Math.max(0, g.fill - dt / DRAIN_TIME);
+  g.fill = advanceHold(g.fill, precision, elapsed);
+  if (g.fill > 0) {
+    g.peakPrecision = Math.max(g.peakPrecision || 0, precision);
+    if (State.observations) State.observations.matchedMs += Math.min(250, elapsed);
   }
-
-  // Feedback copy — throttled so it doesn't flicker every frame.
-  if (now - (g.lastTextUpdate || 0) > 320) {
+  if (now-(g.lastTextUpdate || 0) > 300) {
     g.lastTextUpdate = now;
     updateFeedback(precision, result);
+    renderHoldProgress();
   }
-
-  if (g.fill >= 1) snapRep();
+  if (g.fill >= 1) { snapRep(); return; }
+  if (g.elapsedMs >= g.maxMs) {
+    const move = State.routine.moves.find(m => m.id === g.moveId);
+    const moveState = State.session.moves[State.session.moveIndex];
+    moveState.activeElapsedMs = g.elapsedMs;
+    State.phaseGate = null;
+    showSelfCheck(move);
+    document.getElementById("phaseCue").textContent = "Let's check in";
+    document.getElementById("phaseSub").textContent = "The camera could not confirm every cycle. You can confirm your practice, retry, or skip.";
+    renderHoldProgress();
+  }
 }
 
 function snapRep() {
@@ -1094,9 +1096,13 @@ function snapRep() {
   const peak = g.peakPrecision || 0;
   const petals = peak >= 0.9 ? 3 : peak >= 0.7 ? 2 : peak >= 0.5 ? 1 : 0;
   g.petals = g.petals || [];
-  g.petals.push(petals);
-  g.reps++;
+  g.phasePetals = [...(g.phasePetals || []), petals];
   g.phaseIdx++;
+  if (g.phaseIdx % g.phases.length === 0) {
+    g.petals.push(Math.min(...g.phasePetals));
+    g.phasePetals = [];
+    g.reps++;
+  }
   g.fill = 0;
   g.peakPrecision = 0;
   g.lastBucket = null;
@@ -1108,9 +1114,10 @@ function snapRep() {
 
   if (g.reps >= g.requiredReps) {
     const moveState = State.session.moves[State.session.moveIndex];
-    moveState.activeElapsedMs = performance.now() - g.startTime;
+    moveState.activeElapsedMs = g.elapsedMs;
     moveState.status = "completed";
-    moveState.userConfirmed = true;
+    moveState.userConfirmed = false;
+    moveState.cameraConfirmed = true;
     moveState.endedAt = new Date().toISOString();
     moveState.repPetals = [...g.petals];
     moveState.quality = g.petals.reduce((s, p) => s + p, 0);          // 0..12
@@ -1148,6 +1155,8 @@ function autoAdvance(quality) {
   showCompletionFlash(quality);
   AudioEngine.complete(quality);
   setStageLabel("Done");
+  renderMoveGuide("", "");
+  renderHoldProgress();
   const cueEl = document.getElementById("phaseCue");
   const subEl = document.getElementById("phaseSub");
   const text = quality === undefined
@@ -1272,7 +1281,9 @@ function runActivePaced(move) {
     const p = sched[i];
     State.active = { moveId: move.id, phase: p.phase };
     document.getElementById("phaseCue").textContent = p.cue.en;
-    document.getElementById("phaseSub").textContent = "";
+    document.getElementById("phaseSub").textContent = State.mode === "guided" ? "Follow at your own pace." : "Timed guidance · no camera matching for this move.";
+    renderMoveGuide(move.id, p.phase);
+    renderHoldProgress();
     setPhaseVisual(phaseVisualFor(move.id, p.phase));
 
     if (p.cycleIdx !== lastCycleIdx) {
@@ -1322,6 +1333,8 @@ function cycleCountFor(move) {
 // --- Self check overlay ---
 function showSelfCheck(move) {
   State.active = null;
+  renderMoveGuide("", "");
+  renderHoldProgress();
   setStageLabel("Done?");
   setPhaseVisual("done");
   document.getElementById("phaseCue").textContent = move.script.outroEn;
@@ -1360,13 +1373,17 @@ function handleSelfResult(status) {
 function pauseExercise(fromVisibility) {
   if (!State.session) return;
   State.paused = true;
+  if (State.phaseGate) State.phaseGate.fill = 0;
+  renderHoldProgress();
   document.getElementById("pauseOverlay").hidden = fromVisibility ? true : false;
   document.getElementById("pauseBtn").textContent = "▶";
+  document.getElementById("pauseBtn").setAttribute("aria-label", "Resume");
 }
 function resumeExercise() {
   State.paused = false;
   document.getElementById("pauseOverlay").hidden = true;
   document.getElementById("pauseBtn").textContent = "II";
+  document.getElementById("pauseBtn").setAttribute("aria-label", "Pause");
 }
 
 // --- Demo replay overlay ---
@@ -1374,6 +1391,7 @@ function showDemoOverlay() {
   const s = State.session;
   if (!s) return;
   const m = State.routine.moves[s.moveIndex];
+  document.getElementById("demoIllustrations").innerHTML = guideSequence(m);
   document.getElementById("demoTitle").textContent = m.title.en;
   document.getElementById("demoCue").textContent = m.script.introEn;
   document.getElementById("demoOverlay").hidden = false;
@@ -1634,15 +1652,18 @@ function showDiag(msg) {
 // FACE MESH DRAWING
 // =========================================================
 function fitCanvasToVideo(canvas, video) {
-  const dpr = window.devicePixelRatio || 1;
-  const w = video.videoWidth, h = video.videoHeight;
+  if (!canvas || !video.videoWidth || !video.videoHeight) return false;
+  const w = canvas.clientWidth, h = canvas.clientHeight;
   if (!w || !h) return false;
-  if (canvas.width !== w * dpr || canvas.height !== h * dpr) {
-    canvas.width  = w * dpr;
-    canvas.height = h * dpr;
-    const ctx = canvas.getContext("2d");
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  }
+  const dpr = window.devicePixelRatio || 1;
+  const pw = Math.round(w*dpr), ph = Math.round(h*dpr);
+  if (canvas.width !== pw || canvas.height !== ph) { canvas.width = pw; canvas.height = ph; }
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.fillStyle = "#faf7ef";
+  ctx.fillRect(0,0,w,h);
+  const t = containTransform(video.videoWidth, video.videoHeight, w, h);
+  ctx.setTransform(dpr*t.scale,0,0,dpr*t.scale,dpr*t.x,dpr*t.y);
   return true;
 }
 
@@ -1651,9 +1672,9 @@ function drawMesh(canvas, video, landmarks) {
   const ctx = canvas.getContext("2d");
   const w = video.videoWidth, h = video.videoHeight;
 
-  // Pure-black ground. The camera video is hidden via CSS so the
+  // Warm ivory ground. The camera video is hidden via CSS so the
   // canvas is the whole image the user sees.
-  ctx.fillStyle = "#000";
+  ctx.fillStyle = "#faf7ef";
   ctx.fillRect(0, 0, w, h);
 
   if (!landmarks || !landmarks.length) return;
@@ -1662,39 +1683,39 @@ function drawMesh(canvas, video, landmarks) {
 
   // Face oval — whisper-thin outer silhouette
   drawSmoothContour(ctx, pts, CONTOURS.oval, w, h, {
-    close: true, stroke: "rgba(255,255,255,0.22)", lw: 0.9 * scale,
+    close: true, stroke: "rgba(97,63,53,0.22)", lw: 0.9 * scale,
   });
 
   // Brows — thin closed arcs
   drawSmoothContour(ctx, pts, CONTOURS.leftBrow, w, h, {
-    close: true, stroke: "rgba(255,255,255,0.55)", lw: 1.0 * scale,
+    close: true, stroke: "rgba(97,63,53,0.55)", lw: 1.0 * scale,
   });
   drawSmoothContour(ctx, pts, CONTOURS.rightBrow, w, h, {
-    close: true, stroke: "rgba(255,255,255,0.55)", lw: 1.0 * scale,
+    close: true, stroke: "rgba(97,63,53,0.55)", lw: 1.0 * scale,
   });
 
   // Nose bridge — subtle axis
   drawSmoothContour(ctx, pts, CONTOURS.noseBridge, w, h, {
-    stroke: "rgba(255,255,255,0.2)", lw: 0.7 * scale,
+    stroke: "rgba(97,63,53,0.2)", lw: 0.7 * scale,
   });
 
   // Eyes — crisper, closed
   drawSmoothContour(ctx, pts, CONTOURS.leftEye, w, h, {
-    close: true, stroke: "rgba(255,255,255,0.78)", lw: 1.1 * scale,
+    close: true, stroke: "rgba(97,63,53,0.78)", lw: 1.1 * scale,
   });
   drawSmoothContour(ctx, pts, CONTOURS.rightEye, w, h, {
-    close: true, stroke: "rgba(255,255,255,0.78)", lw: 1.1 * scale,
+    close: true, stroke: "rgba(97,63,53,0.78)", lw: 1.1 * scale,
   });
 
   // Lips — the single colour accent on the whole model
   drawSmoothContour(ctx, pts, CONTOURS.lipsOuter, w, h, {
     close: true,
-    fill:   "rgba(255,138,170,0.18)",
-    stroke: "rgba(255,255,255,0.92)",
+    fill:   "rgba(196,95,63,0.12)",
+    stroke: "rgba(97,63,53,0.92)",
     lw: 1.3 * scale,
   });
   drawSmoothContour(ctx, pts, CONTOURS.lipsInner, w, h, {
-    close: true, stroke: "rgba(255,255,255,0.32)", lw: 0.6 * scale,
+    close: true, stroke: "rgba(97,63,53,0.32)", lw: 0.6 * scale,
   });
 
   // Seven key control points — tiny bright dots with soft halo
@@ -1703,20 +1724,15 @@ function drawMesh(canvas, video, landmarks) {
     const p = pts[idx];
     if (!p) continue;
     ctx.save();
-    ctx.shadowColor = "rgba(255,255,255,0.7)";
-    ctx.shadowBlur = 8 * scale;
-    ctx.fillStyle = "#fff";
+    ctx.shadowColor = "rgba(97,63,53,0.7)";
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "#898e46";
     ctx.beginPath();
     ctx.arc(p.x * w, p.y * h, dotR, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
   }
 
-  // Exercise target overlays sit on top so gameplay still reads.
-  if (State.active) {
-    drawPhaseTarget(ctx, pts, w, h, State.active.moveId, State.active.phase);
-    drawPuckerGuide(ctx, pts, w, h, State.active.moveId, State.active.phase);
-  }
 }
 
 // Draws a smooth curve through the landmark path using quadratic
@@ -1770,173 +1786,6 @@ function drawSmoothContour(ctx, pts, indices, w, h, opts) {
   ctx.restore();
 }
 
-function drawPuckerGuide(ctx, pts, w, h, moveId, phase) {
-  if (moveId !== "pucker_side_to_side" && moveId !== "pucker_circles") return;
-  const dev = lipDeviation(pts);
-  if (!dev) return;
-
-  const noseX = dev.noseX * w;
-  const neutralLipY = (dev.noseY + dev.eyeDistX * 0.35) * h;
-  const eyeDistPx = dev.eyeDistX * w;
-  const matchScore = matchForActivePhase();
-  const warm = matchScore;
-  const gateFill = State.phaseGate?.fill || 0;
-
-  ctx.save();
-
-  if (moveId === "pucker_side_to_side") {
-    const sign = phase === "left" ? 1 : -1;
-    const targetX = noseX + sign * eyeDistPx * 0.1;
-    const targetR = eyeDistPx * 0.045;
-
-    // Target zone
-    ctx.strokeStyle = `rgba(255, ${210 - warm * 60}, ${160 - warm * 110}, ${0.6 + warm * 0.4})`;
-    ctx.lineWidth = 2 + warm * 1.5;
-    ctx.setLineDash(warm > 0.55 ? [] : [6, 5]);
-    ctx.shadowColor = `rgba(255,210,170,${0.3 + warm * 0.6})`;
-    ctx.shadowBlur = 10 + warm * 20;
-    ctx.beginPath();
-    ctx.arc(targetX, neutralLipY, targetR, 0, Math.PI * 2);
-    ctx.stroke();
-
-    // Fill (gateFill grows while matching)
-    if (gateFill > 0.02) {
-      ctx.setLineDash([]);
-      ctx.shadowBlur = 0;
-      const grad = ctx.createRadialGradient(targetX, neutralLipY, 0, targetX, neutralLipY, targetR);
-      grad.addColorStop(0, `rgba(255,210,160,${gateFill * 0.6})`);
-      grad.addColorStop(1, "rgba(255,160,110,0)");
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.arc(targetX, neutralLipY, targetR * (0.7 + gateFill * 0.3), 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-  }
-
-  if (moveId === "pucker_circles") {
-    const centerX = noseX;
-    const centerY = neutralLipY;
-    const radius = eyeDistPx * 0.095;
-
-    // Dashed track
-    ctx.strokeStyle = "rgba(255,255,255,0.3)";
-    ctx.lineWidth = 1.4;
-    ctx.setLineDash([5, 5]);
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-    ctx.stroke();
-
-    // Target position on the ring
-    const angles = { left: 0, up: -Math.PI / 2, right: Math.PI, down: Math.PI / 2 };
-    const angle = angles[phase];
-    if (angle === undefined) { ctx.restore(); return; }
-    const tx = centerX + Math.cos(angle) * radius;
-    const ty = centerY + Math.sin(angle) * radius;
-    const targetR = eyeDistPx * 0.038;
-
-    // Target marker
-    ctx.strokeStyle = `rgba(255, ${210 - warm * 60}, ${160 - warm * 110}, ${0.75 + warm * 0.25})`;
-    ctx.lineWidth = 2 + warm * 1.5;
-    ctx.setLineDash(warm > 0.55 ? [] : [5, 4]);
-    ctx.shadowColor = `rgba(255,210,170,${0.3 + warm * 0.6})`;
-    ctx.shadowBlur = 10 + warm * 18;
-    ctx.beginPath();
-    ctx.arc(tx, ty, targetR, 0, Math.PI * 2);
-    ctx.stroke();
-
-    // Fill
-    if (gateFill > 0.02) {
-      ctx.setLineDash([]);
-      ctx.shadowBlur = 0;
-      const grad = ctx.createRadialGradient(tx, ty, 0, tx, ty, targetR);
-      grad.addColorStop(0, `rgba(255,210,160,${gateFill * 0.6})`);
-      grad.addColorStop(1, "rgba(255,160,110,0)");
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.arc(tx, ty, targetR * (0.7 + gateFill * 0.3), 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-  }
-
-  ctx.restore();
-}
-
-function drawPhaseTarget(ctx, pts, w, h, moveId, phase) {
-  const corners = [pts[61], pts[291]];
-  const lips = [pts[13], pts[14]];
-  const eyes = [pts[33], pts[263]];
-  if (!corners[0] || !corners[1] || !lips[0] || !lips[1] || !eyes[0] || !eyes[1]) return;
-
-  const cx = ((corners[0].x + corners[1].x) / 2) * w;
-  const cy = ((lips[0].y + lips[1].y) / 2) * h;
-  const eyeDist = Math.hypot((eyes[1].x - eyes[0].x) * w, (eyes[1].y - eyes[0].y) * h);
-
-  let rx, ry, matchScore = 0;
-  const bs = State.blendshapes;
-  switch (moveId + ":" + phase) {
-    case "vowel_a_u:a":
-      rx = eyeDist * 0.17; ry = eyeDist * 0.22;
-      matchScore = Math.min(1, (bs.jawOpen || 0) / 0.35);
-      break;
-    case "vowel_a_u:u":
-    case "vowel_e_u:u":
-      rx = eyeDist * 0.09; ry = eyeDist * 0.11;
-      matchScore = Math.min(1, (bs.mouthPucker || 0) / 0.45);
-      break;
-    case "vowel_e_u:e":
-      rx = eyeDist * 0.26; ry = eyeDist * 0.08;
-      matchScore = Math.min(1, (((bs.mouthSmileLeft || 0) + (bs.mouthSmileRight || 0)) / 2) / 0.30);
-      break;
-    default: return;
-  }
-
-  // Count matched time for the final report (observable: visible lip envelope met the target).
-  if (State.observations && matchScore > 0.6 && !State.phaseGate) {
-    State.observations.matchedMs = (State.observations.matchedMs || 0) + 33;
-  }
-
-  // Outline shifts cool-dashed → warm-solid as the user matches the target.
-  const warm = matchScore;
-
-  // Fill meter inside the target: grows while the gate is accumulating.
-  const gateFill = State.phaseGate?.fill || 0;
-  if (gateFill > 0.02) {
-    ctx.save();
-    const alpha = Math.min(0.55, gateFill * 0.55);
-    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(rx, ry));
-    grad.addColorStop(0, `rgba(255,210,160,${alpha})`);
-    grad.addColorStop(1, "rgba(255,160,110,0)");
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.ellipse(cx, cy, rx * (0.75 + gateFill * 0.25), ry * (0.75 + gateFill * 0.25), 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-  }
-  const r = 255;
-  const g = Math.round(210 - warm * 70);
-  const b = Math.round(170 - warm * 110);
-  const alpha = 0.55 + warm * 0.4;
-
-  ctx.save();
-  // soft outer halo
-  ctx.shadowColor = `rgba(${r},${g+30},${b+50},${0.3 + warm * 0.5})`;
-  ctx.shadowBlur = 12 + warm * 20;
-  ctx.strokeStyle = `rgba(${r},${g},${b},${alpha})`;
-  ctx.lineWidth = Math.max(1.5, w / 320) + warm * 2;
-  if (warm < 0.55) {
-    ctx.setLineDash([Math.max(5, w / 110), Math.max(5, w / 140)]);
-  } else {
-    ctx.setLineDash([]);
-  }
-  ctx.beginPath();
-  ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
-  ctx.stroke();
-
-  ctx.restore();
-}
-
 // =====================================================
 // Aurora responder — ambient background reacts to blendshapes.
 // Writes CSS variables; CSS maps them to blob opacity, blur, hue.
@@ -1961,7 +1810,7 @@ function updateAurora() {
 
 function readBlendshapes(result) {
   const cats = result.faceBlendshapes?.[0]?.categories;
-  if (!cats) return;
+  if (!result.faceLandmarks?.length || !cats) { State.blendshapes = {}; return; }
   const alpha = 0.35;
   for (const c of cats) {
     const prev = State.blendshapes[c.categoryName] || 0;
@@ -1973,13 +1822,13 @@ function readBlendshapes(result) {
 // Session mandala — one petal per move, colored by move family.
 // =====================================================
 const PETAL_PRESETS = [
-  { grad: "radial-gradient(ellipse at 50% 30%, #ffd7a8 0%, #ff8a7a 55%, #ff5f8a 100%)", rot: 0 },
-  { grad: "radial-gradient(ellipse at 50% 30%, #ffcfe0 0%, #ff8ac6 55%, #a94ce7 100%)", rot: 51.4 },
-  { grad: "radial-gradient(ellipse at 50% 30%, #fff3b5 0%, #ffc772 55%, #ff8a3d 100%)", rot: 102.8 },
-  { grad: "radial-gradient(ellipse at 50% 30%, #ffe3f0 0%, #f9a8d9 55%, #d35bb0 100%)", rot: 154.2 },
-  { grad: "radial-gradient(ellipse at 50% 30%, #d9f6e2 0%, #85d9b3 55%, #4ab09a 100%)", rot: 205.7 },
-  { grad: "radial-gradient(ellipse at 50% 30%, #d9ebff 0%, #9ac1ff 55%, #6a8bff 100%)", rot: 257.1 },
-  { grad: "radial-gradient(ellipse at 50% 30%, #f1dcff 0%, #c89aff 55%, #8a5df0 100%)", rot: 308.5 },
+  { grad: "linear-gradient(160deg, #f8eee2, #ffc0c0)", rot: 0.0 },
+  { grad: "linear-gradient(160deg, #f8eee2, #e2aa9e)", rot: 51.4 },
+  { grad: "linear-gradient(160deg, #f8eee2, #c3c78d)", rot: 102.9 },
+  { grad: "linear-gradient(160deg, #f8eee2, #f3b9b6)", rot: 154.3 },
+  { grad: "linear-gradient(160deg, #f8eee2, #d6d35f)", rot: 205.7 },
+  { grad: "linear-gradient(160deg, #f8eee2, #a9af70)", rot: 257.1 },
+  { grad: "linear-gradient(160deg, #f8eee2, #e9c2b6)", rot: 308.6 },
 ];
 
 function renderMandala(session) {
@@ -2075,6 +1924,10 @@ window.FaceYoga = {
   renderMandala,
   renderRepDots,
   evaluatePrecision,
+  beginCalibration,
+  recordTrackingFrame,
+  renderMoveGuide,
+  bindExerciseDialogs,
   async loadRoutine() {
     const res = await fetch("routine.v2.json");
     State.routine = await res.json();

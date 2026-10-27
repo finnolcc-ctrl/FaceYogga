@@ -1,3 +1,4 @@
+import { measureFace } from "./tracking.mjs";
 // Test harness — drives the detection pipeline from UI sliders.
 // Builds a mock face: hand-placed landmark positions in a 478-length array,
 // applies the lip Δx/Δy sliders to the mouth landmarks, and runs the real
@@ -96,6 +97,14 @@ function populateMoveSelect() {
 
 function buildMockSession() {
   FY.State.mode = "camera_assisted_candidate";
+  // Explicit synthetic reference poses: this harness never substitutes for live calibration.
+  const neutral = measureFace(BASE_LANDMARKS, {}, 480, 640);
+  const u = { ...neutral, pucker: .7 };
+  FY.State.calibration = {
+    neutral, a: { ...neutral, jaw: .6 }, u, e: { ...neutral, smile: .5 },
+    left: { ...u, x: neutral.x + .12 }, right: { ...u, x: neutral.x - .12 },
+    up: { ...u, y: neutral.y - .07 * 640/480 }, down: { ...u, y: neutral.y + .07 * 640/480 },
+  };
   FY.State.session = {
     startedAt: new Date().toISOString(),
     date: new Date().toISOString().slice(0, 10),
@@ -191,6 +200,8 @@ function startMockLoop() {
     bs.browInnerUp = 0;
 
     FY.State.lastLandmarks = buildFrameLandmarks(dx, dy);
+    FY.State.frameSize = { width: 480, height: 640 };
+    FY.State.lastFrameAt = performance.now();
 
     FY.advanceGate();
     FY.drawMesh(meshEl, fakeVideo, FY.State.lastLandmarks);
@@ -216,55 +227,7 @@ function updateStatus() {
 }
 
 function computeMatch() {
-  const a = FY.State.active;
-  if (!a) return 0;
-  const bs = FY.State.blendshapes;
-  const pts = FY.State.lastLandmarks?.[0];
-  const key = a.moveId + ":" + a.phase;
-  switch (key) {
-    case "vowel_a_u:a": return Math.min(1, (bs.jawOpen || 0) / 0.35);
-    case "vowel_a_u:u":
-    case "vowel_e_u:u": return Math.min(1, (bs.mouthPucker || 0) / 0.45);
-    case "vowel_e_u:e": return Math.min(1, (((bs.mouthSmileLeft || 0) + (bs.mouthSmileRight || 0)) / 2) / 0.30);
-    case "pucker_side_to_side:left":
-    case "pucker_side_to_side:right": {
-      if (!pts) return 0;
-      const puckScore = bs.mouthPucker || 0;
-      if (puckScore < 0.18) return 0;
-      const d = lipDev(pts);
-      const sign = a.phase === "left" ? 1 : -1;
-      return Math.min(1, Math.max(0, (d.dx * sign) / 0.085));
-    }
-    case "pucker_circles:left":
-    case "pucker_circles:right":
-    case "pucker_circles:up":
-    case "pucker_circles:down": {
-      if (!pts) return 0;
-      const puckScore = bs.mouthPucker || 0;
-      if (puckScore < 0.18) return 0;
-      const d = lipDev(pts);
-      switch (a.phase) {
-        case "left":  return Math.min(1, Math.max(0,  d.dx) / 0.075);
-        case "right": return Math.min(1, Math.max(0, -d.dx) / 0.075);
-        case "up":    return Math.min(1, Math.max(0, -d.dy) / 0.045);
-        case "down":  return Math.min(1, Math.max(0,  d.dy) / 0.045);
-      }
-    }
-  }
-  return 0;
-}
-
-function lipDev(pts) {
-  const nose = pts[1], upperLip = pts[13], lowerLip = pts[14];
-  const lipL = pts[61], lipR = pts[291];
-  const eyeL = pts[33], eyeR = pts[263];
-  const eyeDistX = Math.abs(eyeR.x - eyeL.x) || 0.001;
-  const lipCX = (lipL.x + lipR.x) / 2;
-  const lipCY = (upperLip.y + lowerLip.y) / 2;
-  const dx = (lipCX - nose.x) / eyeDistX;
-  const neutralY = nose.y + eyeDistX * 0.35;
-  const dy = (lipCY - neutralY) / eyeDistX;
-  return { dx, dy };
+  return FY.evaluatePrecision()?.precision || 0;
 }
 
 function renderRhythmDots(total, active) {

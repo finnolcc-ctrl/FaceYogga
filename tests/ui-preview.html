@@ -1,0 +1,41 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><base href="../"><title>FaceYogga · UI fixture</title><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="onboarding.css"></head><body><script type="module">
+// Static fixture of production markup and helpers. No camera, model or stored session.
+import { POSES, calibrationDiagram } from './guidance.mjs';
+const params=new URLSearchParams(location.search);
+const pose=Object.hasOwn(POSES,params.get('pose'))?params.get('pose'):'a';
+const html=await (await fetch('index.html')).text();
+const page=new DOMParser().parseFromString(html,'text/html');
+page.querySelectorAll('script').forEach(s=>s.remove());
+document.body.replaceChildren(...page.body.childNodes);
+window.__faceYogaTest=true;
+await import('./app.js');
+const FY=window.FaceYoga;
+await FY.loadRoutine();
+FY.bindActions();FY.bindExerciseDialogs();
+if(params.get('screen')==='calibration'){
+  FY.show('calibration');
+  document.getElementById('calibCue').textContent=POSES[pose].title;
+  document.getElementById('calibSub').textContent=POSES[pose].detail;
+  document.getElementById('calibIllustration').innerHTML=calibrationDiagram(pose);
+  document.getElementById('calibStatus').textContent='Hold gently · 0.7 / 1.2 s';
+  document.getElementById('calibProgress').value=.7/1.2;
+} else {
+  FY.show('exercise');
+  const move=FY.State.routine.moves.find(m=>m.id===(pose==='e'?'vowel_e_u':pose==='a'||pose==='u'?'vowel_a_u':'pucker_side_to_side'));
+  FY.State.session={moveIndex:move.order-1,moves:FY.State.routine.moves.map(m=>({id:m.id,status:'not_started'}))};
+  FY.State.active={moveId:move.id,phase:pose};
+  FY.renderMoveGuide(move.id,pose);
+  document.getElementById('phaseCue').textContent=POSES[pose].title;
+  document.getElementById('phaseSub').textContent='Shape found — hold gently.';
+  document.getElementById('stageLabel').textContent='Match';
+  document.getElementById('moveIndex').textContent=move.order;
+  document.getElementById('holdFeedback').hidden=false;
+  document.getElementById('holdProgress').value=.6;
+  document.getElementById('holdLabel').textContent='Hold gently · 0.6 / 1.0 s';
+  FY.renderRepDots(4,[3]);
+  if(params.get('camera')==='1'){
+    document.querySelector('[data-screen="exercise"]').classList.add('in-camera-mode');
+    document.getElementById('sessionMode').textContent='Calibrated practice';
+  }
+}
+</script></body></html>
