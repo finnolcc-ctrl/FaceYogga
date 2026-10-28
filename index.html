@@ -454,8 +454,7 @@
 
   <!-- ============ EXERCISE ============ -->
   <section class="screen screen-exercise" data-screen="exercise" hidden>
-    <video id="exerciseVideo" aria-hidden="true" playsinline autoplay muted></video>
-    <canvas id="exerciseMesh" aria-hidden="true" class="mesh-canvas mesh-canvas-soft"></canvas>
+
     <div class="sticker-layer" id="exerciseStickers" aria-hidden="true"></div>
     <div class="exercise-dim" aria-hidden="true"></div>
 
@@ -470,24 +469,29 @@
     </header>
 
     <div class="exercise-body">
-      <div class="phase-stage" id="phaseStage">
-        <div class="phase-track" id="phaseTrack"></div>
-        <div class="phase-visual" id="phaseVisual">
-          <div class="phase-glow" id="phaseGlow"></div>
-          <span class="phase-letter" id="phaseLetter"></span>
-          <div class="phase-dot" id="phaseDot"></div>
-        </div>
-        <div class="phase-ring" id="phaseRing"></div>
+      <h1 id="practiceHeading" class="practice-heading">Watch the movement</h1>
+      <div id="faceViewSwitch" class="face-view-switch" role="group" aria-label="Your face view" hidden>
+        <button data-action="lineView" id="lineViewButton" aria-pressed="true">Line</button>
+        <button data-action="cameraView" id="cameraViewButton" aria-pressed="false">Camera</button>
       </div>
-
+      <div id="portraitStage" class="portrait-stage">
+        <div id="heroGuide" class="hero-guide"></div>
+        <canvas id="exerciseMesh" aria-label="Your live line portrait" class="mesh-canvas mesh-canvas-soft"></canvas>
+        <div id="cameraMirror" class="camera-mirror" aria-hidden="true" role="img" aria-label="Your live camera in a soft oval mirror">
+          <video id="exerciseVideo" aria-hidden="true" playsinline autoplay muted></video>
+        </div>
+        <p id="liveFaceHint" hidden>Bring your face into view</p>
+      </div>
+      <div id="demoCountdown" class="demo-countdown" aria-label="Get ready" role="timer"><span>3</span><span>2</span><span>1</span></div>
+      <div class="phase-stage" id="phaseStage" hidden><div id="phaseTrack"></div><div id="phaseVisual"><div id="phaseGlow"></div><span id="phaseLetter"></span><div id="phaseDot"></div></div><div id="phaseRing"></div></div>
       <div class="phase-copy">
-        <span class="pill" id="stageLabel">Ready</span>
-        <h2 class="phase-cue" id="phaseCue">—</h2>
-        <div id="moveGuide" class="move-guide" hidden></div>
+        <div id="moveGuide" class="move-guide">
+          <div id="guideDock" class="guide-dock"></div>
+          <div class="guide-text"><span class="eyebrow" id="stageLabel">Watch &amp; prepare</span><h2 class="phase-cue" id="phaseCue">—</h2><p id="guideDetail"></p></div>
+        </div>
         <p class="phase-sub" id="phaseSub" role="status">—</p>
         <div id="holdFeedback" class="hold-feedback" hidden><span id="holdLabel">Hold gently · 0.0 / 1.0 s</span><progress id="holdProgress" max="1" value="0" aria-label="Continuous hold progress"></progress></div>
       </div>
-
       <div class="rhythm-dots" id="rhythmDots"></div>
     </div>
 
@@ -495,7 +499,7 @@
       <p class="exercise-reassurance">Move at your own pace</p>
       <button class="btn btn-ghost small" data-action="replayDemo">Replay demo</button>
       <button class="btn btn-ghost small" data-action="skipMove">Skip</button>
-      <button class="audio-toggle" data-action="toggleSound" id="soundToggle" aria-label="Toggle sound" aria-pressed="false">♪</button>
+      <button class="audio-toggle" data-action="toggleSound" id="soundToggle" aria-label="Toggle voice guidance and sounds" aria-pressed="false">♪</button>
     </footer>
 
     <div class="selfcheck glass" id="selfcheck" hidden>

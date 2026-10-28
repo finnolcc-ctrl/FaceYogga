@@ -1,6 +1,7 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><base href="../"><title>FaceYogga · UI fixture</title><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="onboarding.css"></head><body><script type="module">
 // Static fixture of production markup and helpers. No camera, model or stored session.
 import { POSES, calibrationDiagram } from './guidance.mjs';
+import { portraitSVG } from './portrait.mjs';
 const params=new URLSearchParams(location.search);
 const pose=Object.hasOwn(POSES,params.get('pose'))?params.get('pose'):'a';
 const html=await (await fetch('index.html')).text();
@@ -23,7 +24,13 @@ if(params.get('screen')==='calibration'){
   FY.show('exercise');
   const move=FY.State.routine.moves.find(m=>m.id===(pose==='e'?'vowel_e_u':pose==='a'||pose==='u'?'vowel_a_u':'pucker_side_to_side'));
   FY.State.session={moveIndex:move.order-1,moves:FY.State.routine.moves.map(m=>({id:m.id,status:'not_started'}))};
+  FY.State.mode=params.get('camera')==='1'?'camera_assisted_candidate':'guided';
   FY.State.active={moveId:move.id,phase:pose};
+  const screen=document.querySelector('[data-screen="exercise"]');
+  screen.classList.add('is-following');
+  document.getElementById('practiceHeading').textContent=FY.State.mode==='guided'?'Follow along':'Now your turn';
+  document.getElementById('demoCountdown').hidden=true;
+  document.getElementById('faceViewSwitch').hidden=FY.State.mode==='guided';
   FY.renderMoveGuide(move.id,pose);
   document.getElementById('phaseCue').textContent=POSES[pose].title;
   document.getElementById('phaseSub').textContent='Shape found — hold gently.';
@@ -35,7 +42,35 @@ if(params.get('screen')==='calibration'){
   FY.renderRepDots(4,[3]);
   if(params.get('camera')==='1'){
     document.querySelector('[data-screen="exercise"]').classList.add('in-camera-mode');
-    document.getElementById('sessionMode').textContent='Calibrated practice';
+    document.getElementById('sessionMode').textContent='Layout preview · no live camera';
+    document.getElementById('liveFaceHint').hidden=false;
+    document.getElementById('liveFaceHint').textContent='Your live face appears here';
   }
+  if(params.get('mirror')==='1') {
+    const canvas=document.createElement('canvas');canvas.width=640;canvas.height=480;
+    const ctx=canvas.getContext('2d'), img=new Image();
+    const url=URL.createObjectURL(new Blob([portraitSVG('neutral').replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" ')],{type:'image/svg+xml'}));
+    img.src=url;await img.decode();URL.revokeObjectURL(url);
+    let stopped=false;
+    function paint(time) {
+      if(stopped)return;
+      ctx.fillStyle='#e7d9c4';ctx.fillRect(0,0,640,480);
+      ctx.fillStyle='#c1c599';ctx.fillRect(0,0,160,480);
+      ctx.fillStyle='#f2c1b8';ctx.fillRect(480,0,160,480);
+      ctx.save();ctx.translate(320+Math.sin(time/1800)*8,215);
+      ctx.fillStyle='#faf7ef';ctx.beginPath();ctx.ellipse(0,0,119,173,0,0,7);ctx.fill();ctx.restore();
+      ctx.drawImage(img,160+Math.sin(time/1800)*8,0,320,380);
+      ctx.fillStyle='#613f35';ctx.font='20px sans-serif';ctx.fillText('Test video '+Math.floor(time/1000)+' s',220,440);
+      requestAnimationFrame(paint);
+    }
+    paint(0);
+    const stream=canvas.captureStream(24),video=document.getElementById('exerciseVideo');
+    video.srcObject=stream;await video.play();
+    document.getElementById('liveFaceHint').hidden=true;
+    document.getElementById('sessionMode').textContent='Synthetic video · no camera';
+    FY.setFaceView('camera');
+    window.addEventListener('pagehide',()=>{stopped=true;stream.getTracks().forEach(t=>t.stop());},{once:true});
+  }
+  if(params.get('intro')==='1') FY.runDemo(move);
 }
 </script></body></html>

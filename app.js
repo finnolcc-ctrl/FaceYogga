@@ -9,23 +9,17 @@ import {
 
 import { measureFace, medianSample, calibrationIssue, samplesAreStable, canMatch,
   evaluatePose, advanceHold, containTransform } from "./tracking.mjs";
-import { POSES, CALIBRATION_STEPS, mouthDiagram, calibrationDiagram, guideKey, guideSequence } from "./guidance.mjs";
+import { POSES, CALIBRATION_STEPS, mouthDiagram, calibrationDiagram, guideKey } from "./guidance.mjs";
+
+import { portraitSVG, animatePortrait, faceFrame, portraitTransform, drawTrackedHair } from "./portrait.mjs";
 
 const STORAGE_KEY = "faceyoga.v2";
 const MP_VERSION = "1.1.0";
 const MODEL_URL  = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
 
 // =====================================================
-// FACE MODEL — line-art portrait
-// Camera video is hidden; the canvas paints warm ivory
-// and draws a refined hairline-contour face.
-//   - face oval (whisper-thin)
-//   - brows + nose bridge (thin)
-//   - eye contours (crisp)
-//   - lip contours with a single rose accent
-//   - 7 small key-point dots with a soft halo
-// Everything is drawn with smooth quadratic curves so
-// the geometry reads as designed, not polygonal.
+// FACE MODEL — shared fine line art with tracked facial proportions.
+// Camera mode uses the native video element in a soft oval mirror.
 // =====================================================
 const SHOW_STICKERS = false;
 
@@ -39,7 +33,6 @@ const CONTOURS = {
   lipsOuter: [61,185,40,39,37,0,267,269,270,409,291,375,321,405,314,17,84,181,91,146],
   lipsInner: [78,191,80,81,82,13,312,311,310,415,308,324,318,402,317,14,87,178,88,95],
 };
-const KEY_DOTS = [10, 33, 263, 1, 61, 291, 152];
 const STICKER_SLOTS = {
   brow_green_l:  { anchor: 55,  size: 18, offset: [0, 0],  imageUrl: "stickers/brow.svg"   },
   brow_green_r:  { anchor: 285, size: 18, offset: [0, 0],  imageUrl: "stickers/brow.svg"   },
@@ -119,6 +112,8 @@ const Stickers = { setup: null, exercise: null };
 // -------- State --------
 const State = {
   routine: null,
+  faceView: "line", intro: false, guideMotion: null, replayMotion: null, guideSVG: null,
+  scheduled: {},
   mode: "guided",          // "guided" | "camera_assisted_candidate"
   cameraStream: null,
   landmarker: null,
@@ -450,11 +445,14 @@ const Actions = {
   selfCompleted:  () => handleSelfResult("completed"),
   selfRetry:      () => handleSelfResult("retry"),
   selfSkip:       () => handleSelfResult("skipped"),
+  lineView: () => setFaceView("line"),
+  cameraView: () => setFaceView("camera"),
   toggleSound:    () => {
     AudioEngine.setEnabled(!AudioEngine.enabled);
     document.getElementById("soundToggle")?.classList.toggle("on", AudioEngine.enabled);
     document.getElementById("soundToggle")?.setAttribute("aria-pressed", String(AudioEngine.enabled));
-    if (AudioEngine.enabled) AudioEngine.tone(660, 120, "sine", 0.08);
+    if (AudioEngine.enabled) speakGuide(document.getElementById("guideDetail")?.textContent);
+    else window.speechSynthesis?.cancel();
   },
 
   // ----- Onboarding -----
@@ -691,7 +689,7 @@ function runExerciseMeshLoop() {
         recordTrackingFrame(res, videoEl);
         updateAurora();
         advanceGate();
-        drawMesh(meshEl, videoEl, res.faceLandmarks);
+        if (State.faceView === "line") drawMesh(meshEl, videoEl, res.faceLandmarks);
         Stickers.exercise.update(res.faceLandmarks, meshEl);
         if (res.faceLandmarks?.length) meshEl.classList.add("on");
         else meshEl.classList.remove("on");
@@ -700,6 +698,8 @@ function runExerciseMeshLoop() {
         State.blendshapes = {};
       }
     }
+    const faceVisible = !!State.lastLandmarks?.length && performance.now()-State.lastFrameAt <= 250;
+    document.getElementById("liveFaceHint").hidden = State.intro || faceVisible;
     if (performance.now()-State.lastFrameAt > 250) {
       meshEl.classList.remove("on");
       if (State.phaseGate) {
@@ -800,6 +800,7 @@ function stopCalibration() {
   cancelAnimationFrame(State.timers.setup);
 }
 function stopCamera() {
+  State.faceView = "line";
   stopCalibration();
   if (State.cameraStream) {
     State.cameraStream.getTracks().forEach(t => t.stop());
@@ -827,6 +828,8 @@ function currentFace() {
 // =========================================================
 function startSession(mode) {
   State.mode = mode;
+  State.paused = false;
+  setFaceView("line");
   State.session = {
     startedAt: new Date().toISOString(),
     date: iso(new Date()),
@@ -881,6 +884,7 @@ function teardownExercise() {
 }
 
 function clearAllTimers() {
+  clearPhaseTimers();
   Object.keys(State.timers).forEach((k) => {
     const t = State.timers[k];
     if (!t) return;
@@ -892,6 +896,11 @@ function clearAllTimers() {
 // Stop every move-related timer so the current phase cannot bleed into
 // the next one. Called before Skip / Retry / Self-check transitions.
 function clearPhaseTimers() {
+  for (const entry of Object.values(State.scheduled)) clearTimeout(entry.timer);
+  State.scheduled = {};
+  State.guideMotion?.cancel(); State.replayMotion?.cancel();
+  State.guideFlip?.cancel();
+  window.speechSynthesis?.cancel();
   ["phase", "demo", "ready", "rest", "active"].forEach((k) => {
     const t = State.timers[k];
     if (t) { clearTimeout(t); clearInterval(t); State.timers[k] = null; }
@@ -922,38 +931,91 @@ function updateSessionProgress() {
   document.getElementById("sessionProgress").style.width = pct + "%";
 }
 
-// --- Demo phase ---
-function runDemo(move) {
-  const demoMs = State.routine.defaults.demoMs;
-  renderMoveGuide(move.id, move.phaseSchedule[0].phase);
-  renderHoldProgress();
-  setStageLabel("Demo");
-  document.getElementById("phaseCue").textContent = move.title.en;
-  document.getElementById("phaseSub").textContent = move.script.introEn;
-  setPhaseTrack(trackTypeFor(move.id));
-  setPhaseVisual(demoVisualFor(move.id));
-  renderRhythmDots(cycleCountFor(move), -1);
-
-  State.timers.demo = setTimeout(() => runReady(move), demoMs);
+// Each scheduled cue retains its remaining time while the session is paused.
+function scheduleCue(key, callback, ms) {
+  clearTimeout(State.scheduled[key]?.timer);
+  const entry = { callback, remaining: ms, started: performance.now(), timer: null };
+  State.scheduled[key] = entry;
+  const fire = () => {
+    if (State.scheduled[key] !== entry) return;
+    delete State.scheduled[key];
+    callback();
+  };
+  entry.fire = fire;
+  if (!State.paused) entry.timer = setTimeout(fire, ms);
 }
-
+function speakGuide(text) {
+  if (!AudioEngine.enabled || !text || !window.speechSynthesis || State.paused) return;
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = "en-US"; utterance.rate = .88;
+  window.speechSynthesis.speak(utterance);
+}
+function reducedMotion() { return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches || false; }
+function placeGuide(inHero, animate = false, beforeRect) {
+  const svg = State.guideSVG;
+  const host = document.getElementById(inHero ? "heroGuide" : "guideDock");
+  if (!svg || !host?.appendChild) return;
+  const before = beforeRect || svg.getBoundingClientRect?.();
+  host.appendChild(svg);
+  if (animate && !reducedMotion() && before?.width && svg.animate) {
+    const after = svg.getBoundingClientRect();
+    if (after.width) State.guideFlip = svg.animate([
+      { transform: `translate(${before.x-after.x}px,${before.y-after.y}px) scale(${before.width/after.width},${before.height/after.height})` },
+      { transform: "none" }
+    ], { duration: 520, easing: "cubic-bezier(.22,1,.36,1)", transformOrigin: "0 0" });
+  }
+}
+function runDemo(move) {
+  clearPhaseTimers();
+  State.intro = true;
+  const screen = document.querySelector("[data-screen='exercise']");
+  screen.classList.add("is-demonstrating"); screen.classList.remove("is-following");
+  document.getElementById("practiceHeading").textContent = "Watch the movement";
+  document.getElementById("faceViewSwitch").hidden = true;
+  document.getElementById("demoCountdown").hidden = false;
+  renderMoveGuide(move.id, move.phaseSchedule[0].phase);
+  placeGuide(true);
+  State.guideMotion?.cancel();
+  const keys = move.phaseSchedule.map(p => guideKey(move.id, p.phase));
+  State.guideMotion = animatePortrait(State.guideSVG, keys, {
+    reduced: reducedMotion(), duration: 3000 / keys.length,
+    onPose: key => { document.getElementById("guideDetail").textContent = POSES[key]?.detail || move.script.introEn; }
+  });
+  setStageLabel("Watch & prepare");
+  document.getElementById("phaseCue").textContent = move.title.en;
+  document.getElementById("phaseSub").textContent = "Keep your head still. Move gently.";
+  renderRhythmDots(cycleCountFor(move), -1);
+  speakGuide(move.title.en + ". Keep your head still.");
+  let count = 3;
+  const countdown = () => {
+    document.querySelectorAll("#demoCountdown span").forEach((el,i) => el.classList.toggle("current", i === 3-count));
+    document.getElementById("demoCountdown").setAttribute("aria-label", `Ready in ${count}`);
+    scheduleCue("intro", () => { count--; if(count) countdown(); else runReady(move); }, 1000);
+  };
+  countdown();
+}
 function runReady(move) {
-  const readyMs = State.routine.defaults.readyMs;
-  setStageLabel("Ready");
-  let left = Math.ceil(readyMs / 1000);
-  document.getElementById("phaseCue").textContent = `${left}`;
-  document.getElementById("phaseSub").textContent = move.script.introEn;
-  setPhaseVisual("ready");
-
-  State.timers.ready = setInterval(() => {
-    left--;
-    if (left <= 0) {
-      clearInterval(State.timers.ready);
-      runActive(move);
-      return;
-    }
-    document.getElementById("phaseCue").textContent = `${left}`;
-  }, 1000);
+  const before = State.guideSVG?.getBoundingClientRect?.();
+  State.intro = false;
+  const camera = State.mode === "camera_assisted_candidate";
+  const screen = document.querySelector("[data-screen='exercise']");
+  screen.classList.remove("is-demonstrating"); screen.classList.add("is-following");
+  document.getElementById("practiceHeading").textContent = camera ? "Now your turn" : "Follow along";
+  document.getElementById("faceViewSwitch").hidden = !camera;
+  document.getElementById("demoCountdown").hidden = true;
+  placeGuide(!camera, camera, before);
+  scheduleCue("enter", () => runActive(move), reducedMotion() ? 0 : 520);
+}
+function setFaceView(view) {
+  if (view === "camera" && State.mode !== "camera_assisted_candidate") return;
+  State.faceView = view === "camera" ? "camera" : "line";
+  const camera = State.faceView === "camera";
+  document.getElementById("lineViewButton")?.setAttribute("aria-pressed", String(!camera));
+  document.getElementById("cameraViewButton")?.setAttribute("aria-pressed", String(camera));
+  document.getElementById("cameraMirror")?.setAttribute("aria-hidden", String(!camera));
+  document.querySelector("[data-screen='exercise']")?.classList.toggle("shows-camera", camera);
+  // The same stream drives tracking and the native mirror. No extra model or frame copies.
 }
 
 // --- Active phase: router between detection-gated and timer-paced flows ---
@@ -1023,7 +1085,7 @@ function stepGatedPhase() {
   g.lastBucket = null;
   g.lastOvershoot = null;
   document.getElementById("phaseCue").textContent = p.cue.en;
-  document.getElementById("phaseSub").textContent = "Follow the shape below, then hold gently.";
+  document.getElementById("phaseSub").textContent = "Follow the guide, then hold gently.";
   renderMoveGuide(g.moveId, p.phase);
   renderHoldProgress();
   setPhaseVisual(phaseVisualFor(g.moveId, p.phase));
@@ -1038,13 +1100,19 @@ function updateFeedback(precision, result) {
   if (el && result) el.textContent = result.hint;
 }
 function renderMoveGuide(moveId, phase) {
-  const key = guideKey(moveId, phase);
-  const el = document.getElementById("moveGuide");
-  if (el) {
-    el.hidden = !key;
-    el.innerHTML = key ? `${mouthDiagram(key)}<div><span class="eyebrow">${POSES[key].label}</span><p>${POSES[key].detail}</p></div>` : "";
+  const key = moveId ? guideKey(moveId, phase) : null;
+  State.guideMotion?.cancel();
+  document.getElementById("guideDetail").textContent = key ? POSES[key]?.detail || "Move gently." : "";
+  if (!key) return;
+  if (!State.guideSVG) {
+    const host = document.getElementById("heroGuide");
+    host.innerHTML = portraitSVG(key, "Animated face movement guide");
+    State.guideSVG = host.querySelector?.("svg");
   }
-  document.getElementById("phaseStage")?.classList.toggle("has-guide", !!key && !!el);
+  placeGuide(State.intro || State.mode === "guided");
+  State.guideMotion = animatePortrait(State.guideSVG, [key], {reduced: reducedMotion()});
+  if (State.paused) State.guideMotion.pause();
+  if (!State.intro) speakGuide(POSES[key]?.title);
 }
 function renderHoldProgress() {
   const g = State.phaseGate;
@@ -1167,7 +1235,7 @@ function autoAdvance(quality) {
     : "you kept going.";
   if (cueEl) cueEl.textContent = text;
   if (subEl) subEl.textContent = "";
-  State.timers.rest = setTimeout(() => nextMove(), 1800);
+  scheduleCue("rest", () => nextMove(), 1800);
 }
 
 function showCompletionFlash(quality) {
@@ -1292,7 +1360,7 @@ function runActivePaced(move) {
     }
 
     i++;
-    State.timers.phase = setTimeout(runPhase, p.durationMs);
+    scheduleCue("phase", runPhase, p.durationMs);
   };
   runPhase();
 }
@@ -1366,13 +1434,17 @@ function handleSelfResult(status) {
   // Short rest with outro
   setStageLabel("Rest");
   const restMs = Math.min(2500, State.routine.defaults.resultRestMs);
-  State.timers.rest = setTimeout(() => nextMove(), restMs);
+  scheduleCue("rest", () => nextMove(), restMs);
 }
 
 // --- Pause / resume ---
 function pauseExercise(fromVisibility) {
   if (!State.session) return;
+  if (!State.paused) for (const entry of Object.values(State.scheduled)) {
+    clearTimeout(entry.timer); entry.remaining = Math.max(0, entry.remaining - (performance.now()-entry.started));
+  }
   State.paused = true;
+  State.guideMotion?.pause(); State.guideFlip?.pause(); window.speechSynthesis?.pause();
   if (State.phaseGate) State.phaseGate.fill = 0;
   renderHoldProgress();
   document.getElementById("pauseOverlay").hidden = fromVisibility ? true : false;
@@ -1380,7 +1452,12 @@ function pauseExercise(fromVisibility) {
   document.getElementById("pauseBtn").setAttribute("aria-label", "Resume");
 }
 function resumeExercise() {
+  const wasPaused = State.paused;
   State.paused = false;
+  if (wasPaused) for (const entry of Object.values(State.scheduled)) {
+    entry.started = performance.now(); entry.timer = setTimeout(entry.fire, entry.remaining);
+  }
+  State.guideMotion?.resume(); State.guideFlip?.play(); window.speechSynthesis?.resume();
   document.getElementById("pauseOverlay").hidden = true;
   document.getElementById("pauseBtn").textContent = "II";
   document.getElementById("pauseBtn").setAttribute("aria-label", "Pause");
@@ -1391,13 +1468,16 @@ function showDemoOverlay() {
   const s = State.session;
   if (!s) return;
   const m = State.routine.moves[s.moveIndex];
-  document.getElementById("demoIllustrations").innerHTML = guideSequence(m);
+  document.getElementById("demoIllustrations").innerHTML = portraitSVG(guideKey(m.id,m.phaseSchedule[0].phase));
+  State.replayMotion?.cancel();
+  State.replayMotion = animatePortrait(document.getElementById("demoIllustrations").querySelector("svg"),m.phaseSchedule.map(p=>guideKey(m.id,p.phase)),{reduced:reducedMotion(),onPose:key=>{document.getElementById("demoCue").textContent=POSES[key]?.detail||m.script.introEn;}});
   document.getElementById("demoTitle").textContent = m.title.en;
   document.getElementById("demoCue").textContent = m.script.introEn;
   document.getElementById("demoOverlay").hidden = false;
   pauseExercise(true);
 }
 function hideDemoOverlay() {
+  State.replayMotion?.cancel();
   document.getElementById("demoOverlay").hidden = true;
   resumeExercise();
 }
@@ -1660,8 +1740,7 @@ function fitCanvasToVideo(canvas, video) {
   if (canvas.width !== pw || canvas.height !== ph) { canvas.width = pw; canvas.height = ph; }
   const ctx = canvas.getContext("2d");
   ctx.setTransform(dpr,0,0,dpr,0,0);
-  ctx.fillStyle = "#faf7ef";
-  ctx.fillRect(0,0,w,h);
+  ctx.clearRect(0,0,w,h);
   const t = containTransform(video.videoWidth, video.videoHeight, w, h);
   ctx.setTransform(dpr*t.scale,0,0,dpr*t.scale,dpr*t.x,dpr*t.y);
   return true;
@@ -1672,18 +1751,20 @@ function drawMesh(canvas, video, landmarks) {
   const ctx = canvas.getContext("2d");
   const w = video.videoWidth, h = video.videoHeight;
 
-  // Warm ivory ground. The camera video is hidden via CSS so the
-  // canvas is the whole image the user sees.
-  ctx.fillStyle = "#faf7ef";
-  ctx.fillRect(0, 0, w, h);
 
   if (!landmarks || !landmarks.length) return;
   const pts = landmarks[0];
   const scale = Math.max(0.6, w / 640);
+  const frame = faceFrame(pts,w,h);
+  if (frame) {
+    const t = portraitTransform(frame,canvas.clientWidth,canvas.clientHeight), dpr = window.devicePixelRatio || 1;
+    ctx.setTransform(dpr*t.scale,0,0,dpr*t.scale,dpr*t.x,dpr*t.y);
+    drawTrackedHair(ctx,frame);
+  }
 
   // Face oval — whisper-thin outer silhouette
   drawSmoothContour(ctx, pts, CONTOURS.oval, w, h, {
-    close: true, stroke: "rgba(97,63,53,0.22)", lw: 0.9 * scale,
+    close: true, stroke: "rgba(97,63,53,0.65)", lw: 0.9 * scale,
   });
 
   // Brows — thin closed arcs
@@ -1718,19 +1799,15 @@ function drawMesh(canvas, video, landmarks) {
     close: true, stroke: "rgba(97,63,53,0.32)", lw: 0.6 * scale,
   });
 
-  // Seven key control points — tiny bright dots with soft halo
-  const dotR = Math.max(2.2, w / 260);
-  for (const idx of KEY_DOTS) {
-    const p = pts[idx];
-    if (!p) continue;
-    ctx.save();
-    ctx.shadowColor = "rgba(97,63,53,0.7)";
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = "#898e46";
-    ctx.beginPath();
-    ctx.arc(p.x * w, p.y * h, dotR, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
+  drawSmoothContour(ctx, pts, [129,98,97,2,326,327,358], w,h,{stroke:"rgba(97,63,53,.65)",lw:scale});
+  for (const [center,edge,eye] of [[468,469,CONTOURS.leftEye],[473,474,CONTOURS.rightEye]]) {
+    if (!pts[center] || !pts[edge]) continue;
+    ctx.save(); ctx.beginPath();
+    eye.forEach((index,i) => { const p=pts[index]; if(i) ctx.lineTo(p.x*w,p.y*h); else ctx.moveTo(p.x*w,p.y*h); });
+    ctx.closePath();ctx.clip();
+    const c=pts[center], e=pts[edge], r=Math.hypot((c.x-e.x)*w,(c.y-e.y)*h);
+    ctx.beginPath();ctx.arc(c.x*w,c.y*h,r,0,Math.PI*2);ctx.strokeStyle="#805d4c";ctx.lineWidth=scale;ctx.stroke();
+    ctx.beginPath();ctx.arc(c.x*w,c.y*h,r*.4,0,Math.PI*2);ctx.fillStyle="#613f35";ctx.fill();ctx.restore();
   }
 
 }
@@ -1909,6 +1986,7 @@ window.FaceYoga = {
   AudioEngine,
   show,
   startSession,
+  runDemo, runReady, pauseExercise, resumeExercise, handleSelfResult, setFaceView, scheduleCue, clearPhaseTimers,
   runActive,
   runActiveDetection,
   runActivePaced,

@@ -4,6 +4,7 @@ import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import * as tracking from '../tracking.mjs';
 import * as guidance from '../guidance.mjs';
+import * as portrait from '../portrait.mjs';
 const source = readFileSync(new URL('../app.js',import.meta.url),'utf8').replace(/import\s*\{[\s\S]*?\}\s*from\s*"[^"]+";/g,'');
 const routine = JSON.parse(readFileSync(new URL('../routine.v2.json',import.meta.url)));
 const n={x:.015,y:.44,width:.5,gap:.025,jaw:.02,pucker:.02,smile:.01,yaw:0,pitch:.3,roll:0};
@@ -22,7 +23,8 @@ function detection(f) {
   return {faceLandmarks:[pts],faceBlendshapes:[{categories}]};
 }
 function boot() {
-  let time=1000,raf=null,frame=profile.neutral;
+  let time=1000,raf=null,frame=profile.neutral,nextTimer=1;
+  const timers=new Map();
   const elements=new Map();
   const transforms=[];
   const ctx=new Proxy({}, {get:(_,key)=>key==='setTransform'? (...args)=>transforms.push(args) : key==='createRadialGradient'?()=>({addColorStop(){}}):()=>{}});
@@ -35,9 +37,9 @@ function boot() {
   }
   const document={hidden:false,getElementById:element,querySelector:element,querySelectorAll:()=>[],
     createElement:element,body:element('body'),documentElement:element('root'),addEventListener(){}};
-  const sandbox={...tracking,...guidance,console,URLSearchParams,document,location:{search:'?test=1',pathname:'/'},
+  const sandbox={...tracking,...guidance,...portrait,animatePortrait:()=>({cancel(){},pause(){},resume(){}}),console,URLSearchParams,document,location:{search:'?test=1',pathname:'/'},
     window:{__faceYogaTest:true,devicePixelRatio:2,scrollTo(){}},navigator:{},performance:{now:()=>time},
-    setTimeout:()=>1,setInterval:()=>1,clearTimeout(){},clearInterval(){},
+    setTimeout:(fn,ms)=>{const id=nextTimer++;timers.set(id,{fn,at:time+ms});return id;},setInterval:()=>1,clearTimeout:id=>timers.delete(id),clearInterval(){},
     requestAnimationFrame:fn=>{raf=fn;return 2;},cancelAnimationFrame:()=>{raf=null;},
     fetch:async()=>({json:async()=>structuredClone(routine)})};
   vm.runInNewContext(source,sandbox);
@@ -56,7 +58,7 @@ function boot() {
     if(f) Object.assign(FY.State.blendshapes,{jawOpen:f.jaw,mouthPucker:f.pucker,mouthSmileLeft:f.smile,mouthSmileRight:f.smile});
     FY.advanceGate();
   }
-  return {FY,element,tick,transforms,calibTick(f,ms=50){time+=ms;frame=f;element('calibVideo').currentTime+=ms/1000;const cb=raf;raf=null;cb?.();}};
+  return {FY,element,tick,transforms,elapse(ms){const end=time+ms;let loops=0;while(loops++<1000){const next=[...timers].filter(([id,t])=>t.at<=end).sort((a,b)=>a[1].at-b[1].at)[0];if(!next)break;time=next[1].at;timers.delete(next[0]);next[1].fn();}time=end;},calibTick(f,ms=50){time+=ms;frame=f;element('calibVideo').currentTime+=ms/1000;const cb=raf;raf=null;cb?.();}};
 }
 test('a full left/right cycle requires both sides; all four cycles complete',()=>{
   const {FY,tick}=boot();FY.runActive(routine.moves[0]);
@@ -130,4 +132,37 @@ test('actual mesh renderer resizes to viewport and applies a uniform pixel scale
     const [sx,, ,sy]=transforms.at(-1);
     assert.equal(sx,sy);
   }
+});
+
+test('three second demo pauses in place, then enters the actual movement once',()=>{
+ const {FY,elapse,element}=boot();FY.State.mode='guided';FY.runDemo(routine.moves[0]);
+ elapse(1200);FY.pauseExercise(true);elapse(10000);
+ assert.equal(FY.State.intro,true);assert.equal(FY.State.active,null);
+ FY.resumeExercise();elapse(1799);assert.equal(FY.State.intro,true);
+ elapse(1);assert.equal(FY.State.intro,false);assert.equal(element('demoCountdown').hidden,true);
+ elapse(520);assert.equal(FY.State.active.phase,'left');
+});
+test('skip cancels the pending intro and cannot start the skipped movement',()=>{
+ const {FY,elapse}=boot();FY.State.mode='guided';FY.runDemo(routine.moves[0]);
+ elapse(500);FY.handleSelfResult('skipped');elapse(1000);
+ assert.equal(FY.State.active,null);assert.equal(FY.State.session.moves[0].status,'skipped');
+ assert.equal(FY.State.scheduled.intro,undefined);
+});
+test('paced phase retains its remaining duration when paused',()=>{
+ const {FY,elapse}=boot();FY.State.mode='guided';FY.runActive(routine.moves[0]);
+ const duration=routine.moves[0].phaseSchedule[0].durationMs;
+ elapse(duration-200);FY.pauseExercise(true);elapse(10000);assert.equal(FY.State.active.phase,'left');
+ FY.resumeExercise();elapse(199);assert.equal(FY.State.active.phase,'left');elapse(1);assert.equal(FY.State.active.phase,'right');
+});
+
+test('mirror switches immediately without changing movement or hold progress',()=>{
+ const {FY}=boot();FY.runActive(routine.moves[0]);
+ const active=FY.State.active,gate=FY.State.phaseGate;
+ gate.fill=.4;
+ FY.setFaceView('camera');assert.equal(FY.State.faceView,'camera');
+ FY.setFaceView('line');assert.equal(FY.State.faceView,'line');
+ assert.equal(FY.State.active,active);assert.equal(FY.State.phaseGate,gate);assert.equal(gate.fill,.4);
+});
+test('guided mode does not enable a camera mirror',()=>{
+ const {FY}=boot();FY.State.mode='guided';FY.setFaceView('camera');assert.equal(FY.State.faceView,'line');
 });
