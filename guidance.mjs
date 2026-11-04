@@ -17,10 +17,11 @@ Object.assign(POSES, {
   air_left: { title:'Air to your left', label:'Left cheek', detail:'Close your lips and gently move the air into your left cheek.' },
   air_right: { title:'Air to your right', label:'Right cheek', detail:'Keep your lips closed and move the air into your right cheek.' },
   draw_in: { title:'Draw your cheeks inward', label:'Cheeks inward', detail:'Gently draw both cheeks in. Keep your jaw relaxed.' },
+  release: { title:'Release your cheeks', label:'Let cheeks soften', detail:'Let both cheeks open back to their resting shape. Keep your lips soft.' },
   hold: { title:'Hold gently', label:'Soft, steady hold', detail:'Keep your cheeks gently drawn in. Relax your forehead.' },
 });
 for (const side of ['left','right']) for (const level of ['up','down']) {
-  POSES[`tongue_${side}_${level}`] = { title:`Tongue to your ${side}`, label:`Inside your ${side} cheek`, detail:`With lips closed, move your tongue along the ${level === 'up' ? 'upper' : 'lower'} inside of your ${side} cheek. The dot marks the contact area.` };
+  POSES[`tongue_${side}_${level}`] = { title:`Tongue ${level} · ${side} cheek`, label:`Inside your ${side} cheek`, detail:`With lips closed, move your tongue along the ${level === 'up' ? 'upper' : 'lower'} inside of your ${side} cheek. The dot marks the contact area.` };
 }
 export const CALIBRATION_STEPS = ['neutral', 'a', 'u', 'e', 'left', 'right', 'up', 'down'];
 export function mouthDiagram(key) {
@@ -34,10 +35,19 @@ export function guideKey(moveId, phase) {
   if (moveId.startsWith('vowel_') || moveId.startsWith('pucker_')) return phase;
   if (moveId === 'air_side_to_side') return `air_${phase}`;
   if (moveId === 'tongue_inner_cheek') return `tongue_${phase}`;
-  if (moveId === 'cheek_draw_in') return phase === 'release' ? 'neutral' : phase;
+  if (moveId === 'cheek_draw_in') return phase;
   return 'neutral';
 }
+export function guidePoseKeys(move) {
+  return move.phaseSchedule.concat(move.afterRepeats || []).map(p => guideKey(move.id, p.phase));
+}
+const stepLabels = {
+  a:'Open A', e:'Widen E', u:'Round U', left:'Left', right:'Right', up:'Up', down:'Down',
+  air_left:'Left cheek', air_right:'Right cheek', draw_in:'Draw in', release:'Release', hold:'Hold',
+  tongue_left_up:'Left ↑', tongue_left_down:'Left ↓', tongue_right_up:'Right ↑', tongue_right_down:'Right ↓'
+};
 export function guideSequence(move) {
-  const keys = [...new Set(move.phaseSchedule.map(p => guideKey(move.id, p.phase)).filter(Boolean))];
-  return keys.map(key => `<figure>${mouthDiagram(key)}<figcaption>${POSES[key].label}</figcaption></figure>`).join('');
+  return guidePoseKeys(move).map((key,i) =>
+    `<li data-step="${key}">${portraitSVG(key,POSES[key].label,true)}<span>${i+1} · ${stepLabels[key] || POSES[key].label}</span></li>`
+  ).join('');
 }

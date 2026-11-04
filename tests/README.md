@@ -11,10 +11,10 @@ Before evaluating real recognition, enter Mirror mode and complete fresh calibra
 
 ## Animated portrait and soft oval mirror (2026-10-28)
 
-- Tests cover simultaneous 3-second demo/countdown, pausing, skipping, head framing,
+- Tests cover a separate demonstration and 3-second countdown, pausing, skipping, head framing,
   directional lip shapes, and switching views without resetting movement/hold progress.
 - `/tests/ui-preview.html?pose=left&camera=1&intro=1` runs the production intro and
-  transition without requesting a camera. Omit `intro=1` for a stable layout check.
+  transition without requesting a camera (tap “I’m ready” on the first move). Omit `intro=1` for a stable layout check.
 - Camera mode directly displays the same video used by face tracking, with a CSS
   oval gradient mask. It retains some background inside the mirror. No second model,
   segmentation worker, bitmap transfers, or per-frame mask/compositing pass remains.

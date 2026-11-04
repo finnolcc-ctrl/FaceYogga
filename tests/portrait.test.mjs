@@ -4,7 +4,7 @@ import { poseShape, faceFrame, portraitTransform, HAIR_PATHS, portraitSVG } from
 test('guide moves the lips toward the displayed direction with distinct A/E/U shapes',()=>{
  assert.ok(poseShape('left').x<poseShape('u').x);assert.ok(poseShape('right').x>poseShape('u').x);
  assert.ok(poseShape('a').gap>poseShape('u').gap);assert.ok(poseShape('e').w>poseShape('a').w);
- assert.equal(HAIR_PATHS.length,40);assert.match(portraitSVG('u'),/portrait-hair/);
+ assert.ok(HAIR_PATHS.every(d=>portraitSVG('u').includes(d)));assert.match(portraitSVG('u'),/portrait-hair/);
 });
 test('head frame and portrait crop use source pixels and preserve aspect',()=>{
  const pts=Array.from({length:478},()=>({x:.5,y:.5}));

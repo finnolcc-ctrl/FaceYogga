@@ -1,18 +1,52 @@
+import { sketchReady, renderSketch, guideSketch, fitSketch } from "./sketch.mjs";
+export { trackedSketch, renderSketch, fitSketch, mouthBounds, traceLipHold } from "./sketch.mjs";
+
+if (typeof customElements !== "undefined" && !customElements.get("fy-sketch")) {
+  customElements.define("fy-sketch", class extends HTMLElement {
+    connectedCallback() {
+      if (!this.canvas) {
+        this.canvas=document.createElement("canvas");
+        this.canvas.width=640;this.canvas.height=760;
+        this.canvas.style.cssText="width:320px;height:380px;display:block";
+        this.append(this.canvas);
+      }
+      sketchReady.then(ready=>{
+        if (!ready || !this.isConnected) return;
+        this.ready=true;
+        this.closest("svg")?.querySelector("[data-fallback]")?.setAttribute("display","none");
+        this.paint(this.pose || this.dataset.pose, this.amount ?? 1);
+      });
+    }
+    paint(key,amount) {
+      this.pose=key;this.amount=amount;
+      if (!this.ready) return;
+      const ctx=this.canvas.getContext("2d");
+      ctx.setTransform(2,0,0,2,0,0);ctx.clearRect(0,0,320,380);
+      fitSketch(ctx,320,380);renderSketch(ctx,guideSketch(key,amount));
+    }
+  });
+}
 // Shared artwork for the tutorial and tracked portrait. Coordinates are design units,
 // not detection measurements. Live facial features still come from the user's landmarks.
 const f = n => Number(n.toFixed(2));
-export const HAIR_OUTLINE = 'M54 151 C37 111 40 69 65 44 C91 14 132 12 160 17 C190 12 230 16 255 44 C280 73 281 111 266 151 L257 163 C255 118 245 94 220 81 C197 69 179 73 160 83 C137 68 119 69 98 82 C73 97 64 122 63 164Z';
-export const HAIR_PATHS = [];
-// Swept-back strands radiate from a broad hairline, with a soft off-center part.
-for (let i=0;i<20;i++) {
-  const t=i/19;
-  const x=62+98*t, y=150-79*Math.sin(t*Math.PI/2)+12*t**6;
-  const endX=54+100*t,endY=110-88*Math.sin(t*Math.PI/2);
-  HAIR_PATHS.push(`M${f(x)} ${f(y)} C${f(x-12*(1-t))} ${f(y-30)} ${f(endX-10*(1-t))} ${f(endY-8*(1-t))} ${f(endX)} ${f(endY)}`);
-  HAIR_PATHS.push(`M${f(320-x)} ${f(y)} C${f(320-x+12*(1-t))} ${f(y-30)} ${f(320-endX+10*(1-t))} ${f(endY-8*(1-t))} ${f(320-endX)} ${f(endY)}`);
-}
+export const HAIR_OUTLINE = 'M62 161 C43 135 41 100 53 71 C66 38 96 20 133 18 C148 17 156 19 164 20 C197 12 232 26 253 49 C274 74 281 114 258 161 C257 125 244 97 218 84 C197 72 177 72 161 80 C139 70 116 74 96 85 C77 97 65 127 62 161Z';
+const KNOT = 'M119 28 C118 17 126 9 140 6 C153 3 169 5 179 12 C187 17 191 23 189 29 C167 38 143 38 119 28Z';
+const KNOT_FOLD = 'M124 23 C137 12 155 8 171 12 M139 20 C152 13 167 14 179 20';
+const HAIR_WASH = '#806b60';
+// Soft tapered sections define how the hair wraps behind each ear.
+const HAIR_LOCKS = 'M62 153 C55 124 65 79 91 54 C68 85 63 119 62 153Z M257 142 C261 107 245 69 220 46 C248 65 268 110 257 142Z M151 75 C160 57 162 40 160 29 C166 44 161 62 151 75Z';
+// Grouped pencil strokes follow the sweep of the hair, with open space between locks.
+export const HAIR_PATHS = [
+  'M60 144 C54 103 63 64 92 41', 'M61 130 C61 89 77 52 112 32',
+  'M68 108 C80 70 99 47 130 29', 'M81 95 C102 61 119 45 146 27',
+  'M99 83 C118 59 140 45 155 29', 'M124 76 C142 56 156 41 161 27',
+  'M158 77 C167 56 169 40 165 25', 'M173 73 C178 51 177 37 171 25',
+  'M194 74 C195 53 188 37 178 25', 'M215 81 C213 56 199 36 186 27',
+  'M234 95 C232 67 214 44 199 32', 'M248 115 C252 85 236 58 219 43',
+  'M257 136 C265 109 258 83 245 65'
+];
 export function hairSVG() {
-  return `<g class="portrait-hair" fill="none" stroke="currentColor" stroke-linecap="round"><path d="${HAIR_OUTLINE}" stroke-width="1.25"/>${HAIR_PATHS.map((d,i)=>`<path d="${d}" stroke-width="${i%3===0?'.8':'.55'}" opacity="${i%3===0?'.85':'.58'}"/>`).join('')}</g>`;
+  return `<g class="portrait-hair" stroke-linecap="round"><path d="${KNOT}" fill="${HAIR_WASH}" stroke="#705c4e"/><path d="${KNOT_FOLD}" fill="none" stroke="#b59d89" stroke-width=".8"/><path d="${HAIR_OUTLINE}" fill="${HAIR_WASH}" stroke="#896b58" stroke-width="1.1"/><path d="${HAIR_LOCKS}" fill="#59473e" fill-opacity=".34" stroke="none"/><g fill="none" stroke="#d7bfaa" opacity=".76">${HAIR_PATHS.map((d,i)=>`<path d="${d}" stroke-width="${i%3===0?'1.1':'.7'}"/>`).join('')}</g></g>`;
 }
 // Eye widths and spacing are drawn together, keeping roughly one eye width
 // between the inner corners. Tracked portraits never use these illustrative offsets.
@@ -57,17 +91,20 @@ export function mouthPaths(s) {
     jaw:`M64 149 C62 192 ${f(66-s.cheekL)} 232 91 269 C110 ${f(297+s.jaw)} 141 ${f(319+s.jaw)} 160 ${f(320+s.jaw)} C179 ${f(319+s.jaw)} 210 ${f(297+s.jaw)} 229 269 C${f(254+s.cheekR)} 232 258 192 256 149`,
   };
 }
-export function portraitSVG(key='neutral', label='Face movement demonstration') {
+export function portraitSVG(key='neutral', label='Face movement demonstration', closeup=false) {
   const p=mouthPaths(poseShape(key));
-  return `<svg class="mouth-diagram line-portrait" viewBox="0 0 320 380" role="img" aria-label="${label}" data-pose="${key}">
-    <g fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round">
+  const cheek = key.startsWith("tongue_") || key.startsWith("air_") || ["draw_in","release","hold"].includes(key);
+  const crop = cheek ? "70 209 180 76" : "104 231 112 58";
+  return `<svg class="mouth-diagram line-portrait" viewBox="${closeup ? crop : '0 0 320 380'}" role="img" aria-label="${label}" data-pose="${key}">
+    <g data-fallback fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round">
       ${hairSVG()}<path data-feature="jaw" d="${p.jaw}"/>
       <path d="M108 291 C112 315 110 338 94 356 M212 291 C208 315 210 338 226 356" opacity=".45"/>
       ${FACE_STATIC.replace('data-feature="brows"',`data-feature="brows" transform="translate(0 ${poseShape(key).brow})"`)}
       <path data-feature="outer" d="${p.outer}" fill="#ffc0c0" fill-opacity=".12"/>
       <path data-feature="inner" d="${p.inner}" stroke-width=".85" fill="#613f35" fill-opacity=".07"/>
       <path data-feature="chin" d="${p.chin}" opacity=".28" stroke-width=".75"/>
-      <path data-feature="arrow" class="motion-arrow" transform="translate(0 -11)" stroke-width="1.8" d="${arrowPath(key)}"/>
+    </g><foreignObject width="320" height="380"><fy-sketch xmlns="http://www.w3.org/1999/xhtml" data-pose="${key}" style="display:block"></fy-sketch></foreignObject>
+    <g fill="none" stroke-linecap="round" stroke-linejoin="round"><path data-feature="arrow" class="motion-arrow" transform="translate(0 -11)" stroke-width="1.8" d="${arrowPath(key)}"/>
     </g></svg>`;
 }
 export function arrowPath(key) {
@@ -78,6 +115,7 @@ export function arrowPath(key) {
   if(key==='e'||key==='smile')return 'M115 270 H97 l5-4 m-5 4 5 4 M205 270 h18 l-5-4 m5 4-5 4';
   if(key==='u')return 'M113 272 h22 l-5-4 m5 4-5 4 M207 272 h-22 l5-4 m-5 4 5 4';
   if(key.startsWith('tongue_')) { const x=key.includes('left')?93:227, y=key.endsWith('up')?235:265; return `M${x-5} ${y} a5 5 0 1 0 10 0 a5 5 0 1 0 -10 0`; }
+  if(key==='release')return 'M101 249 H84 l5-4 m-5 4 5 4 M219 249 h17 l-5-4 m5 4-5 4';
   if(key==='draw_in'||key==='hold')return 'M83 249 h17 l-5-4 m5 4-5 4 M237 249 h-17 l5-4 m-5 4 5 4';
   return '';
 }
@@ -86,13 +124,17 @@ export function animatePortrait(svg, keys, { loop=true, reduced=false, onPose, d
   if(!svg?.querySelector) return {cancel(){},pause(){},resume(){}};
   let raf=0,last=0,elapsed=0,paused=false,cancelled=false,lastKey='';
   const nodes=Object.fromEntries(['outer','inner','jaw','chin','arrow','brows'].map(k=>[k,svg.querySelector(`[data-feature="${k}"]`)]));
+  const sketch=svg.querySelector("fy-sketch");
   const render=(key,amount)=>{
-    const target=poseShape(key), shape={};
-    for(const k in NEUTRAL_MOUTH)shape[k]=NEUTRAL_MOUTH[k]+(target[k]-NEUTRAL_MOUTH[k])*amount;
-    const paths=mouthPaths(shape);
-    for(const k of ['outer','inner','jaw','chin'])nodes[k]?.setAttribute('d',paths[k]);
+    sketch?.paint?.(key,amount);
+    if(!sketch?.ready){
+      const target=poseShape(key), shape={};
+      for(const k in NEUTRAL_MOUTH)shape[k]=NEUTRAL_MOUTH[k]+(target[k]-NEUTRAL_MOUTH[k])*amount;
+      const paths=mouthPaths(shape);
+      for(const k of ['outer','inner','jaw','chin'])nodes[k]?.setAttribute('d',paths[k]);
+      nodes.brows?.setAttribute('transform',`translate(0 ${shape.brow})`);
+    }
     nodes.arrow?.setAttribute('d',arrowPath(key));
-    nodes.brows?.setAttribute('transform',`translate(0 ${shape.brow})`);
     svg.dataset.pose=key;
     if(lastKey!==key){lastKey=key;onPose?.(key);}
   };
@@ -105,7 +147,7 @@ export function animatePortrait(svg, keys, { loop=true, reduced=false, onPose, d
       const slot=elapsed/duration, index=Math.floor(slot), t=slot-index;
       const key=keys[(loop?index:Math.min(index,keys.length-1))%keys.length]||'neutral';
       // Smooth reach, readable hold, then return to neutral before the next direction.
-      const ramp=t<.4?t/.4:t<.73?1:(1-t)/.27;
+      const ramp=key==='hold' && keys.length===1 ? Math.min(1,slot/.4) : t<.4?t/.4:t<.73?1:(1-t)/.27;
       const eased=Math.max(0,Math.min(1,ramp));
       render(key,eased*eased*(3-2*eased));
     }
@@ -133,15 +175,4 @@ export function portraitTransform(frame,viewW,viewH) {
   const cropH=Math.abs(ex.y)*width*1.48+Math.abs(ey.y)*height*1.5;
   const scale=Math.min(viewW/cropW,viewH/cropH);
   return {scale,x:viewW/2-cx*scale,y:viewH/2-cy*scale};
-}
-export function drawTrackedHair(ctx,frame) {
-  if(!frame||typeof Path2D==='undefined')return;
-  const {top,ex,ey,width,height}=frame, sx=width/198,sy=height/255;
-  ctx.save();
-  ctx.transform(ex.x*sx,ex.y*sx,ey.x*sy,ey.y*sy,top.x-ex.x*sx*160-ey.x*sy*83,top.y-ex.y*sx*160-ey.y*sy*83);
-  ctx.strokeStyle='#805d4c';ctx.lineWidth=1.1;ctx.stroke(new Path2D(HAIR_OUTLINE));
-  ctx.globalAlpha=.5;ctx.stroke(new Path2D('M64 151 C57 142 46 146 49 167 C51 184 56 199 65 198 M256 151 C263 142 274 146 271 167 C269 184 264 199 255 198 M106 306 C110 330 109 354 100 363 M214 306 C210 330 211 354 220 363'));
-  ctx.lineWidth=.6;ctx.globalAlpha=.65;
-  for(const d of HAIR_PATHS)ctx.stroke(new Path2D(d));
-  ctx.restore();
 }

@@ -134,8 +134,10 @@ test('actual mesh renderer resizes to viewport and applies a uniform pixel scale
   }
 });
 
-test('three second demo pauses in place, then enters the actual movement once',()=>{
+test('first demo waits for readiness; the separate countdown pauses and enters once',()=>{
  const {FY,elapse,element}=boot();FY.State.mode='guided';FY.runDemo(routine.moves[0]);
+ elapse(30000);assert.equal(element('demoCountdown').hidden,true);assert.equal(FY.State.active,null);
+ FY.beginCountdown(routine.moves[0]);assert.equal(element('demoCountdown').hidden,false);
  elapse(1200);FY.pauseExercise(true);elapse(10000);
  assert.equal(FY.State.intro,true);assert.equal(FY.State.active,null);
  FY.resumeExercise();elapse(1799);assert.equal(FY.State.intro,true);
@@ -144,7 +146,7 @@ test('three second demo pauses in place, then enters the actual movement once',(
 });
 test('skip cancels the pending intro and cannot start the skipped movement',()=>{
  const {FY,elapse}=boot();FY.State.mode='guided';FY.runDemo(routine.moves[0]);
- elapse(500);FY.handleSelfResult('skipped');elapse(1000);
+ FY.beginCountdown(routine.moves[0]);elapse(500);FY.handleSelfResult('skipped');elapse(1000);
  assert.equal(FY.State.active,null);assert.equal(FY.State.session.moves[0].status,'skipped');
  assert.equal(FY.State.scheduled.intro,undefined);
 });
@@ -165,4 +167,117 @@ test('mirror switches immediately without changing movement or hold progress',()
 });
 test('guided mode does not enable a camera mirror',()=>{
  const {FY}=boot();FY.State.mode='guided';FY.setFaceView('camera');assert.equal(FY.State.faceView,'line');
+});
+
+test('quick practice completes one move and keeps its round count separate from full practice',()=>{
+ const {FY,element,elapse}=boot();FY.startSession('guided',true);
+ assert.equal(FY.State.session.moves.length,1);assert.equal(element('moveTotal').textContent,1);
+ const move=FY.State.watchMove;FY.beginCountdown(move);elapse(3520);
+ assert.equal(element('practiceHeading').textContent,move.title.en);assert.equal(element('roundProgress').textContent,'Round 1 of 5');
+ elapse(4000);assert.equal(element('roundProgress').textContent,'Round 2 of 5');
+ elapse(16000);assert.equal(element('selfcheck').hidden,false);
+ FY.handleSelfResult('completed');assert.equal(FY.State.session,null);
+ FY.startSession('guided');assert.equal(FY.State.session.moves.length,7);assert.equal(element('moveTotal').textContent,7);
+});
+test('later moves show a full demo before their automatic countdown',()=>{
+ const {FY,elapse,element}=boot();FY.State.session.moveIndex=1;FY.runDemo(routine.moves[1]);
+ elapse(routine.defaults.demoMs-1);assert.equal(element('demoCountdown').hidden,true);
+ elapse(1);assert.equal(element('demoCountdown').hidden,false);assert.equal(FY.State.active,null);
+ elapse(3520);assert.equal(element('roundProgress').textContent,'Round 1 of 4');
+});
+
+test('quick camera calibrates just A and U against neutral, then counts two confirmed pairs',()=>{
+  const {FY,element,calibTick,elapse,tick}=boot();
+  FY.State.quickCamera=true;
+  FY.beginCalibration();
+  for (const [index,key] of ['neutral','a','u'].entries()) {
+    assert.match(element('calibStep').textContent,new RegExp((index+1)+' / 3'));
+    for(let i=0;i<100 && FY.State.calibrationRun?.index===index;i++) calibTick(profile[key]);
+  }
+  assert.deepEqual(Object.keys(FY.State.calibration),['neutral','a','u']);
+  assert.equal(FY.State.session.moves.length,1);
+  assert.equal(FY.State.watchMove.id,'vowel_a_u');
+  FY.beginCountdown(FY.State.watchMove); elapse(3520);
+  const gate=FY.State.phaseGate;
+  const hold=(pose,frames)=>{for(let i=0;i<frames;i++) tick(pose);};
+  hold(profile.neutral,5);
+  assert.equal(gate.cue,'lower-jaw');
+  hold(profile.a,21);
+  assert.equal(FY.State.active.phase,'u');
+  hold(profile.a,5);
+  assert.equal(gate.cue,'lift-jaw');
+  hold(profile.neutral,1);
+  assert.equal(gate.cue,'lift-jaw'); // a single borderline frame cannot swap arrows
+  hold(profile.neutral,4);
+  assert.equal(gate.cue,'round-lips');
+  hold(profile.u,8);
+  assert.equal(gate.cue,'hold');
+  tick(null);
+  assert.equal(gate.fill,0); assert.equal(gate.cue,null);
+  hold(profile.u,20);
+  assert.equal(gate.reps,1); assert.ok(FY.State.lipRippleAt>0);
+  hold(profile.a,20);hold(profile.u,20);
+  elapse(1800);
+  assert.equal(element('quickResult').textContent,'A to U · 2 rounds · Camera confirmed');
+  assert.equal(FY.State.session,null);
+});
+
+test('line portrait points toward the mirrored target and follows corrections from the camera',()=>{
+  const {FY,tick,element}=boot();
+  const pts=detection(profile.neutral).faceLandmarks[0];
+  pts[10]={x:.5,y:.23}; pts[152]={x:.5,y:.88};
+  const angles=[];
+  const ctx=new Proxy({createRadialGradient:()=>({addColorStop(){}}),rotate:angle=>angles.push(angle)}, {get:(obj,key)=>obj[key] || (()=>{})});
+  const canvas=element('exerciseMesh'); canvas.getContext=()=>ctx;
+  function arrows(){
+    angles.length=0; FY.drawMesh(canvas,element('exerciseVideo'),[pts],true);
+    return [...angles];
+  }
+  FY.runActive(routine.moves[0]);
+  for(let i=0;i<6;i++)tick(profile.neutral);
+  assert.deepEqual(arrows(),[0,Math.PI]); // both corners inward
+  for(let i=0;i<6;i++)tick(profile.u);
+  assert.deepEqual(arrows(),[0]); // source +x is left in the mirror
+  for(let i=0;i<21;i++)tick(profile.left);
+  for(let i=0;i<12;i++)tick(profile.u);
+  assert.deepEqual(arrows(),[Math.PI]);
+  FY.clearPhaseTimers();
+  FY.runActive(routine.moves[3]);
+  for(let i=0;i<6;i++)tick(profile.neutral);
+  assert.deepEqual(arrows(),[Math.PI,0]); // E widens both corners
+  for(let i=0;i<6;i++)tick(profile.a);
+  assert.deepEqual(arrows(),[-Math.PI/2]); // close an overly open jaw first
+});
+
+test('portrait adjustments are bounded independently of mouth movement',()=>{
+  const poses=[profile.a,profile.u,profile.left].map(f=>{
+    const pts=detection(f).faceLandmarks[0];
+    pts[10].y=.22;pts[152].y=.90;
+    const original=structuredClone(pts);
+    const frame=portrait.faceFrame(pts,640,480);
+    const p=portrait.trackedSketch(pts,frame,640,480,f,profile);
+    assert.deepEqual(pts,original);
+    assert.ok(Math.abs(p.faceWidth-1)<=.0351 && Math.abs(p.eyeX)<=6 && Math.abs(p.noseX)<=5);
+    return p;
+  });
+  const [a,u,left]=poses;
+  assert.ok(a.gap>u.gap+20 && u.round>a.round);
+  assert.ok(left.lipX>u.lipX+10);
+  assert.equal(a.eyeY,u.eyeY);
+});
+
+test('timed cheek guidance follows every scheduled phase and ends with self confirmation',()=>{
+  const {FY,element,elapse}=boot();
+  for(const move of routine.moves.slice(4)){
+    FY.clearPhaseTimers(); FY.runActive(move);
+    for(let i=0;i<move.repeat;i++) for(const p of move.phaseSchedule){
+      assert.equal(FY.State.active.guideCue,guidance.guideKey(move.id,p.phase));
+      assert.equal(FY.State.phaseGate,null); assert.equal(FY.State.lipRippleAt,null);
+      elapse(p.durationMs);
+    }
+    if(move.afterRepeats){
+      assert.equal(FY.State.active.guideCue,'hold');elapse(move.afterRepeats[0].durationMs);
+    }
+    assert.equal(FY.State.active,null);assert.equal(element('selfcheck').hidden,false);
+  }
 });

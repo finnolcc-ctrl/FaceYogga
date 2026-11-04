@@ -8,10 +8,10 @@ import {
 } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.1.0/vision_bundle.mjs";
 
 import { measureFace, medianSample, calibrationIssue, samplesAreStable, canMatch,
-  evaluatePose, advanceHold, containTransform } from "./tracking.mjs";
-import { POSES, CALIBRATION_STEPS, mouthDiagram, calibrationDiagram, guideKey } from "./guidance.mjs";
+  evaluatePose, advanceHold } from "./tracking.mjs";
+import { POSES, CALIBRATION_STEPS, mouthDiagram, calibrationDiagram, guideKey, guidePoseKeys, guideSequence } from "./guidance.mjs";
 
-import { portraitSVG, animatePortrait, faceFrame, portraitTransform, drawTrackedHair } from "./portrait.mjs";
+import { portraitSVG, animatePortrait, faceFrame, trackedSketch, renderSketch, fitSketch, mouthBounds, traceLipHold } from "./portrait.mjs";
 
 const STORAGE_KEY = "faceyoga.v2";
 const MP_VERSION = "1.1.0";
@@ -23,16 +23,6 @@ const MODEL_URL  = "https://storage.googleapis.com/mediapipe-models/face_landmar
 // =====================================================
 const SHOW_STICKERS = false;
 
-const CONTOURS = {
-  oval:      [10,338,297,332,284,251,389,356,454,323,361,288,397,365,379,378,400,377,152,148,176,149,150,136,172,58,132,93,234,127,162,21,54,103,67,109],
-  leftBrow:  [46,53,52,65,55,107,66,105,63,70],
-  rightBrow: [276,283,282,295,285,336,296,334,293,300],
-  leftEye:   [33,246,161,160,159,158,157,173,133,155,154,153,145,144,163,7],
-  rightEye:  [362,398,384,385,386,387,388,466,263,249,390,373,374,380,381,382],
-  noseBridge:[168,6,197,195,5,4,1],
-  lipsOuter: [61,185,40,39,37,0,267,269,270,409,291,375,321,405,314,17,84,181,91,146],
-  lipsInner: [78,191,80,81,82,13,312,311,310,415,308,324,318,402,317,14,87,178,88,95],
-};
 const STICKER_SLOTS = {
   brow_green_l:  { anchor: 55,  size: 18, offset: [0, 0],  imageUrl: "stickers/brow.svg"   },
   brow_green_r:  { anchor: 285, size: 18, offset: [0, 0],  imageUrl: "stickers/brow.svg"   },
@@ -115,7 +105,8 @@ const State = {
   faceView: "line", intro: false, guideMotion: null, replayMotion: null, guideSVG: null,
   scheduled: {},
   mode: "guided",          // "guided" | "camera_assisted_candidate"
-  cameraStream: null,
+  cameraStream: null, cameraSetupId: 0, quickCamera: false,
+  lipRippleAt: null,
   landmarker: null,
   session: null,           // active session object
   timers: { phase: null, active: null, demo: null, ready: null, rest: null, setup: null, mesh: null },
@@ -428,6 +419,13 @@ function bindExerciseDialogs() {
 
 const Actions = {
   startSession:   () => { renderPreviewList(); show("preview"); },
+  quickPractice: () => show("quickChoice"),
+  quickGuided: () => { stopCamera(); startSession("guided", true); },
+  quickCamera: () => beginCameraSetup(true),
+  restartCamera: () => beginCameraSetup(State.quickCamera),
+  backFromSetup: () => { const quick = State.quickCamera; stopCamera(); show(quick ? "quickChoice" : "cameraChoice"); },
+  setupGuided: () => { const quick = State.quickCamera; stopCamera(); startSession("guided", quick, "vowel_a_u"); },
+  startCountdown: () => beginCountdown(State.watchMove),
   flowPrevious:  () => scrollFlow(-1),
   flowNext:      () => scrollFlow(1),
   goHome:         () => { teardownExercise(); show("home"); renderHome(); },
@@ -435,7 +433,7 @@ const Actions = {
   toCameraChoice: () => { stopCamera(); show("cameraChoice"); },
   chooseGuided:   () => { State.mode = "guided"; stopCamera(); startSession("guided"); },
   chooseCamera:   () => beginCameraSetup(),
-  skipCalibration:() => { stopCalibration(); State.calibration = null; startSession("camera_assisted_candidate"); },
+  skipCalibration:() => { if (State.quickCamera) { Actions.setupGuided(); return; } stopCalibration(); State.calibration = null; startSession("camera_assisted_candidate"); },
   togglePause:    () => (State.paused ? resumeExercise() : pauseExercise(false)),
   resume:         () => resumeExercise(),
   endSession:     () => endSessionConfirm(),
@@ -521,12 +519,9 @@ function scrollFlow(direction) {
 
 function renderHome() {
   const data = loadStore();
-  const streak = data.streak || 0;
   const total  = data.sessions?.length || 0;
 
   document.getElementById("homeDate").textContent = formatDate(new Date());
-  document.getElementById("streakDay").textContent = Math.max(1, streak);
-  document.getElementById("streakPill").textContent = streak > 0 ? `${streak}-day streak` : "First day";
   document.getElementById("totalSessions").textContent = total;
 
   // Week dots: 7 days ending today
@@ -548,7 +543,7 @@ function renderHome() {
     const dt = new Date(d);
     return (today - dt) <= 6 * 86400000;
   }).length;
-  document.getElementById("weekSummary").textContent = doneThisWeek > 0 ? `${doneThisWeek} this week` : "Start your first";
+  document.getElementById("weekSummary").textContent = doneThisWeek > 0 ? `${doneThisWeek} this week` : "0 this week";
 
   // Mini moves preview
   const list = document.getElementById("movesPreviewHome");
@@ -586,8 +581,10 @@ function renderPreviewList() {
 // =========================================================
 // CAMERA SETUP + CALIBRATION
 // =========================================================
-async function beginCameraSetup() {
+async function beginCameraSetup(quick = false) {
   stopCamera();
+  State.quickCamera = quick;
+  const setupId = State.cameraSetupId;
   State.calibration = null;
   State.blendshapes = {};
   show("setup");
@@ -598,28 +595,36 @@ async function beginCameraSetup() {
 
   try {
     statusEl.textContent = "Requesting camera…";
-    State.cameraStream = await navigator.mediaDevices.getUserMedia({
+    const stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
       audio: false,
     });
-    videoEl.srcObject = State.cameraStream;
+    if (setupId !== State.cameraSetupId) { stream.getTracks().forEach(track => track.stop()); return; }
+    State.cameraStream = stream;
+    videoEl.srcObject = stream;
     await videoEl.play().catch(()=>{});
 
+    if (setupId !== State.cameraSetupId) return;
     statusEl.textContent = "Loading model…";
     if (!State.landmarker) {
       const vision = await FilesetResolver.forVisionTasks(
         `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VERSION}/wasm`
       );
-      State.landmarker = await FaceLandmarker.createFromOptions(vision, {
+      const model = await FaceLandmarker.createFromOptions(vision, {
         baseOptions: { modelAssetPath: MODEL_URL, delegate: "GPU" },
         runningMode: "VIDEO",
         numFaces: 1,
         outputFaceBlendshapes: true,
       });
+      if (setupId !== State.cameraSetupId) { model.close(); return; }
+      State.landmarker = model;
     }
 
     runSetupLoop(videoEl, statusEl, ovalEl);
   } catch (e) {
+    if (setupId !== State.cameraSetupId) return;
+    State.cameraStream?.getTracks().forEach(track => track.stop());
+    State.cameraStream = null;
     statusEl.textContent = "Camera unavailable — you can switch to guided mode.";
     showDiag("camera error: " + e.message);
   }
@@ -689,7 +694,7 @@ function runExerciseMeshLoop() {
         recordTrackingFrame(res, videoEl);
         updateAurora();
         advanceGate();
-        if (State.faceView === "line") drawMesh(meshEl, videoEl, res.faceLandmarks);
+        if (State.faceView === "line") drawMesh(meshEl, videoEl, res.faceLandmarks, !State.paused);
         Stickers.exercise.update(res.faceLandmarks, meshEl);
         if (res.faceLandmarks?.length) meshEl.classList.add("on");
         else meshEl.classList.remove("on");
@@ -721,11 +726,12 @@ function beginCalibration() {
   const video = document.getElementById("calibVideo");
   video.srcObject = State.cameraStream;
   video.play().catch(() => {});
+  const steps = State.quickCamera ? ["neutral", "a", "u"] : CALIBRATION_STEPS;
   const run = { index: 0, profile: {}, frames: [], heldFrom: 0, lastTime: -1, lastFrameAt: 0, readyAt: 0 };
   State.calibrationRun = run;
   const present = () => {
-    const key = CALIBRATION_STEPS[run.index];
-    document.getElementById("calibStep").textContent = `${run.index+1} / ${CALIBRATION_STEPS.length} · your comfortable range`;
+    const key = steps[run.index];
+    document.getElementById("calibStep").textContent = `${run.index+1} / ${steps.length} · your comfortable range`;
     document.getElementById("calibCue").textContent = POSES[key].title;
     document.getElementById("calibSub").textContent = POSES[key].detail;
     document.getElementById("calibIllustration").innerHTML = calibrationDiagram(key);
@@ -758,7 +764,7 @@ function beginCalibration() {
       canvas.classList.toggle("on", !!result.faceLandmarks?.length);
       if (now < run.readyAt || document.hidden) return;
       const face = currentFace();
-      const key = CALIBRATION_STEPS[run.index];
+      const key = steps[run.index];
       const issue = calibrationIssue(key, face, run.profile);
       const status = document.getElementById("calibStatus");
       if (issue) {
@@ -780,10 +786,10 @@ function beginCalibration() {
       }
       run.profile[key] = medianSample(run.frames);
       run.index++;
-      if (run.index === CALIBRATION_STEPS.length) {
+      if (run.index === steps.length) {
         State.calibration = run.profile;
         stopCalibration();
-        startSession("camera_assisted_candidate");
+        startSession("camera_assisted_candidate", State.quickCamera, "vowel_a_u");
       } else present();
     } catch (error) {
       run.frames = []; run.heldFrom = 0;
@@ -800,6 +806,8 @@ function stopCalibration() {
   cancelAnimationFrame(State.timers.setup);
 }
 function stopCamera() {
+  State.cameraSetupId++;
+  State.quickCamera = false;
   State.faceView = "line";
   stopCalibration();
   if (State.cameraStream) {
@@ -826,7 +834,8 @@ function currentFace() {
 // =========================================================
 // EXERCISE SESSION
 // =========================================================
-function startSession(mode) {
+function startSession(mode, quick = false, quickMove = "pucker_side_to_side") {
+  const moves = quick ? State.routine.moves.filter(m => m.id === quickMove) : State.routine.moves;
   State.mode = mode;
   State.paused = false;
   setFaceView("line");
@@ -836,7 +845,8 @@ function startSession(mode) {
     mode,
     routineVersion: State.routine.routineVersion,
     moveIndex: -1,
-    moves: State.routine.moves.map((m) => ({
+    quick,
+    moves: moves.map((m) => ({
       id: m.id,
       mode,
       plannedActiveMs: m.activeMs,
@@ -848,12 +858,14 @@ function startSession(mode) {
   };
   State.observations = { matchedMs: 0, smileWarmth: 0, samples: 0 };
 
+  document.getElementById("pauseBtn").textContent = "II";
+  document.getElementById("pauseBtn").setAttribute("aria-label","Pause");
   requestWakeLock();
   show("exercise");
 
   // Camera visible as a soft mirror backdrop if camera mode
   const exerciseScreen = document.querySelector("[data-screen='exercise']");
-  document.getElementById("sessionMode").textContent = mode === "guided" ? "Guided practice" : State.calibration ? "Calibrated practice" : "Mirror · timed guidance";
+  document.getElementById("sessionMode").textContent = quick ? "Quick practice" : mode === "guided" ? "Guided practice" : State.calibration ? "Calibrated practice" : "Mirror · timed guidance";
   const vid = document.getElementById("exerciseVideo");
   if (mode === "camera_assisted_candidate" && State.cameraStream) {
     vid.srcObject = State.cameraStream;
@@ -896,6 +908,12 @@ function clearAllTimers() {
 // Stop every move-related timer so the current phase cannot bleed into
 // the next one. Called before Skip / Retry / Self-check transitions.
 function clearPhaseTimers() {
+  State.lipRippleAt = null;
+  State.watchMove = null;
+  const steps=document.getElementById("demoSteps");
+  if(steps) steps.hidden=true;
+  document.getElementById("readyToStart").hidden = true;
+  document.getElementById("demoCountdown").hidden = true;
   for (const entry of Object.values(State.scheduled)) clearTimeout(entry.timer);
   State.scheduled = {};
   State.guideMotion?.cancel(); State.replayMotion?.cancel();
@@ -917,17 +935,23 @@ function nextMove() {
     finishSession();
     return;
   }
-  const move = State.routine.moves[s.moveIndex];
+  const move = currentMove();
   s.moves[s.moveIndex].attempts++;
   updateSessionProgress();
 
   runDemo(move);
 }
 
+function currentMove() {
+  const s = State.session;
+  return State.routine.moves.find(m => m.id === s.moves[s.moveIndex].id);
+}
+
 function updateSessionProgress() {
   const s = State.session;
   document.getElementById("moveIndex").textContent = s.moveIndex + 1;
-  const pct = Math.round(((s.moveIndex) / s.moves.length) * 100);
+  document.getElementById("moveTotal").textContent = s.moves.length;
+  const pct = Math.round(((s.moveIndex + 1) / s.moves.length) * 100);
   document.getElementById("sessionProgress").style.width = pct + "%";
 }
 
@@ -969,24 +993,56 @@ function placeGuide(inHero, animate = false, beforeRect) {
 function runDemo(move) {
   clearPhaseTimers();
   State.intro = true;
+  State.watchMove = move;
   const screen = document.querySelector("[data-screen='exercise']");
   screen.classList.add("is-demonstrating"); screen.classList.remove("is-following");
-  document.getElementById("practiceHeading").textContent = "Watch the movement";
+  document.getElementById("practiceHeading").textContent = move.title.en;
   document.getElementById("faceViewSwitch").hidden = true;
-  document.getElementById("demoCountdown").hidden = false;
+  document.getElementById("readyToStart").hidden = false;
   renderMoveGuide(move.id, move.phaseSchedule[0].phase);
   placeGuide(true);
   State.guideMotion?.cancel();
-  const keys = move.phaseSchedule.map(p => guideKey(move.id, p.phase));
+  const demoMs = State.routine.defaults.demoMs;
+  const keys = guidePoseKeys(move);
+  const steps=document.getElementById("demoSteps");
+  steps.innerHTML=guideSequence(move);
+  steps.hidden=false;
+  const showStep=key=>{
+    const index=keys.indexOf(key);
+    setStageLabel(`Demo · Step ${index+1} of ${keys.length}`);
+    document.getElementById("phaseCue").textContent=POSES[key].title;
+    document.getElementById("guideDetail").textContent=POSES[key].detail;
+    steps.querySelectorAll("li").forEach((el,i)=>{
+      if(i===index) el.setAttribute("aria-current","step");
+      else el.removeAttribute("aria-current");
+    });
+  };
+  showStep(keys[0]);
   State.guideMotion = animatePortrait(State.guideSVG, keys, {
-    reduced: reducedMotion(), duration: 3000 / keys.length,
-    onPose: key => { document.getElementById("guideDetail").textContent = POSES[key]?.detail || move.script.introEn; }
+    reduced: reducedMotion(), duration: demoMs / keys.length, onPose: showStep
   });
-  setStageLabel("Watch & prepare");
-  document.getElementById("phaseCue").textContent = move.title.en;
-  document.getElementById("phaseSub").textContent = "Keep your head still. Move gently.";
-  renderRhythmDots(cycleCountFor(move), -1);
-  speakGuide(move.title.en + ". Keep your head still.");
+  const first = State.session.moveIndex === 0;
+  document.getElementById("phaseSub").textContent = first ? "" : "Countdown starts after the demo.";
+  renderRhythmDots(usesDetection(move.id) ? detectionReps(move) : cycleCountFor(move), -1);
+  speakGuide(move.script.introEn);
+  if (!first) scheduleCue("watch", () => beginCountdown(move), demoMs);
+}
+function beginCountdown(move) {
+  if (!move || State.watchMove !== move || State.paused) return;
+  State.watchMove = null;
+  document.getElementById("demoSteps").hidden=true;
+  clearTimeout(State.scheduled.watch?.timer); delete State.scheduled.watch;
+  State.guideMotion?.cancel();
+  window.speechSynthesis?.cancel();
+  const host = document.getElementById("heroGuide");
+  host.innerHTML = portraitSVG("neutral", "Relaxed starting position");
+  State.guideSVG = host.querySelector("svg");
+  document.getElementById("readyToStart").hidden = true;
+  document.getElementById("demoCountdown").hidden = false;
+  setStageLabel("Prepare");
+  document.getElementById("phaseCue").textContent = "Get ready";
+  document.getElementById("guideDetail").textContent = "Relax your jaw and face forward.";
+  document.getElementById("phaseSub").textContent = "";
   let count = 3;
   const countdown = () => {
     document.querySelectorAll("#demoCountdown span").forEach((el,i) => el.classList.toggle("current", i === 3-count));
@@ -1001,7 +1057,7 @@ function runReady(move) {
   const camera = State.mode === "camera_assisted_candidate";
   const screen = document.querySelector("[data-screen='exercise']");
   screen.classList.remove("is-demonstrating"); screen.classList.add("is-following");
-  document.getElementById("practiceHeading").textContent = camera ? "Now your turn" : "Follow along";
+  document.getElementById("practiceHeading").textContent = move.title.en;
   document.getElementById("faceViewSwitch").hidden = !camera;
   document.getElementById("demoCountdown").hidden = true;
   placeGuide(!camera, camera, before);
@@ -1027,6 +1083,10 @@ function usesDetection(moveId) {
 // gameplay doesn't take forever when every rep needs a real snap.
 const DETECTION_REPS = { vowel_a_u: 4, vowel_e_u: 4, pucker_side_to_side: 4, pucker_circles: 4 };
 
+function detectionReps(move) {
+  return State.session.quick && move.id === "vowel_a_u" ? 2 : DETECTION_REPS[move.id];
+}
+
 function runActive(move) {
   if (usesDetection(move.id)) {
     runActiveDetection(move);
@@ -1041,7 +1101,7 @@ function runActive(move) {
 function runActiveDetection(move) {
   const s = State.session;
   const moveState = s.moves[s.moveIndex];
-  const requiredReps = DETECTION_REPS[move.id] || move.repeat || 4;
+  const requiredReps = detectionReps(move);
   const schedule = move.phaseSchedule;
 
   setStageLabel("Match");
@@ -1082,6 +1142,7 @@ function stepGatedPhase() {
   g.peakPrecision = 0;
   g.lastTick = performance.now();
   g.lastTextUpdate = 0;
+  g.cue = g.pendingCue = null;
   g.lastBucket = null;
   g.lastOvershoot = null;
   document.getElementById("phaseCue").textContent = p.cue.en;
@@ -1136,6 +1197,16 @@ function advanceGate() {
   const result = evaluatePrecision();
   const precision = result?.precision || 0;
   g.fill = advanceHold(g.fill, precision, elapsed);
+  const cue = g.fill > 0 ? "hold" : result?.correction;
+  if (!cue || elapsed > 250) {
+    g.cue = g.pendingCue = null;
+    State.lipRippleAt = null;
+  } else if (cue !== g.pendingCue) {
+    g.pendingCue = cue;
+    g.cueSince = now;
+  } else if (now - g.cueSince >= 120) {
+    g.cue = cue;
+  }
   if (g.fill > 0) {
     g.peakPrecision = Math.max(g.peakPrecision || 0, precision);
     if (State.observations) State.observations.matchedMs += Math.min(250, elapsed);
@@ -1177,7 +1248,8 @@ function snapRep() {
   g.lastOvershoot = null;
   g.lastSoundBucket = null;
   renderRepDots(g.requiredReps, g.petals);
-  flashSnap(petals);
+  State.lipRippleAt = performance.now();
+  if (State.faceView !== "line") flashSnap(petals);
   AudioEngine.snap(petals);
 
   if (g.reps >= g.requiredReps) {
@@ -1201,6 +1273,8 @@ function snapRep() {
 // Rep dots: solid gradient = this rep earned petals; dim circle = still to do.
 // Also records petal rating as text ("•••", "••·", etc.) inside the dot.
 function renderRepDots(total, petalsPerRep) {
+  const done = petalsPerRep?.length || 0;
+  document.getElementById("roundProgress").textContent = done === total ? total + " rounds complete" : "Round " + (done+1) + " of " + total;
   const el = document.getElementById("rhythmDots");
   if (!el) return;
   el.innerHTML = "";
@@ -1220,20 +1294,14 @@ function renderRepDots(total, petalsPerRep) {
 // The headline + glow scale with the earned quality so a 12/12 move
 // feels different from a 4/12 one.
 function autoAdvance(quality) {
-  showCompletionFlash(quality);
+  if (State.lipRippleAt == null || State.faceView !== "line") showCompletionFlash(quality);
   AudioEngine.complete(quality);
   setStageLabel("Done");
   renderMoveGuide("", "");
   renderHoldProgress();
   const cueEl = document.getElementById("phaseCue");
   const subEl = document.getElementById("phaseSub");
-  const text = quality === undefined
-    ? "nice."
-    : quality >= 10 ? "stunning."
-    : quality >= 7  ? "that was lovely."
-    : quality >= 4  ? "nice work."
-    : "you kept going.";
-  if (cueEl) cueEl.textContent = text;
+  if (cueEl) cueEl.textContent = "Move complete";
   if (subEl) subEl.textContent = "";
   scheduleCue("rest", () => nextMove(), 1800);
 }
@@ -1323,13 +1391,13 @@ const AudioEngine = {
 window.AudioEngine = AudioEngine;
 
 // Timer-paced active (original flow): used in Guided mode and for moves
-// MediaPipe cannot honestly observe (tongue, air, cheek draw-in, circles).
+// inner-cheek movements that are paced rather than camera-confirmed.
 function runActivePaced(move) {
   const sched = buildPhaseTimeline(move);
   const s = State.session;
   const moveState = s.moves[s.moveIndex];
 
-  setStageLabel("Follow");
+  setStageLabel(State.mode === "guided" ? "Follow" : "Timed guide");
   renderRhythmDots(cycleCountFor(move), 0);
 
   let i = 0;
@@ -1347,9 +1415,9 @@ function runActivePaced(move) {
       return;
     }
     const p = sched[i];
-    State.active = { moveId: move.id, phase: p.phase };
+    State.active = { moveId: move.id, phase: p.phase, guideCue: guideKey(move.id, p.phase), startedAt: performance.now() };
     document.getElementById("phaseCue").textContent = p.cue.en;
-    document.getElementById("phaseSub").textContent = State.mode === "guided" ? "Follow at your own pace." : "Timed guidance · no camera matching for this move.";
+    document.getElementById("phaseSub").textContent = State.mode === "guided" ? "" : "Timed guidance · self-confirmed.";
     renderMoveGuide(move.id, p.phase);
     renderHoldProgress();
     setPhaseVisual(phaseVisualFor(move.id, p.phase));
@@ -1421,7 +1489,7 @@ function handleSelfResult(status) {
   document.getElementById("selfcheck").hidden = true;
 
   if (status === "retry") {
-    const move = State.routine.moves[s.moveIndex];
+    const move = currentMove();
     moveState.attempts++;
     runDemo(move);
     return;
@@ -1431,6 +1499,7 @@ function handleSelfResult(status) {
   moveState.userConfirmed = status === "completed";
   moveState.endedAt = new Date().toISOString();
 
+  if (s.quick) { finishSession(); return; }
   // Short rest with outro
   setStageLabel("Rest");
   const restMs = Math.min(2500, State.routine.defaults.resultRestMs);
@@ -1467,10 +1536,10 @@ function resumeExercise() {
 function showDemoOverlay() {
   const s = State.session;
   if (!s) return;
-  const m = State.routine.moves[s.moveIndex];
+  const m = currentMove();
   document.getElementById("demoIllustrations").innerHTML = portraitSVG(guideKey(m.id,m.phaseSchedule[0].phase));
   State.replayMotion?.cancel();
-  State.replayMotion = animatePortrait(document.getElementById("demoIllustrations").querySelector("svg"),m.phaseSchedule.map(p=>guideKey(m.id,p.phase)),{reduced:reducedMotion(),onPose:key=>{document.getElementById("demoCue").textContent=POSES[key]?.detail||m.script.introEn;}});
+  State.replayMotion = animatePortrait(document.getElementById("demoIllustrations").querySelector("svg"),guidePoseKeys(m),{reduced:reducedMotion(),onPose:key=>{document.getElementById("demoCue").textContent=POSES[key]?.detail||m.script.introEn;}});
   document.getElementById("demoTitle").textContent = m.title.en;
   document.getElementById("demoCue").textContent = m.script.introEn;
   document.getElementById("demoOverlay").hidden = false;
@@ -1492,6 +1561,20 @@ function finishSession(partial = false) {
   clearAllTimers();
   const s = State.session;
   if (!s) { Actions.goHome(); return; }
+
+  if (s.quick) {
+    const completed = s.moves[0].status === "completed";
+    if (completed) {
+      const move = s.moves[0];
+      const title = State.routine.moves.find(m => m.id === move.id).title.en;
+      document.getElementById("quickResult").textContent = move.cameraConfirmed
+        ? title + " · " + move.repPetals.length + " rounds · Camera confirmed"
+        : title + " · Self-confirmed";
+    }
+    teardownExercise();
+    if (completed) { show("quickDone"); } else { show("home"); renderHome(); }
+    return;
+  }
 
   // Mark any un-touched moves as skipped if partial
   s.moves.forEach((m) => { if (m.status === "not_started") m.status = partial ? "skipped" : m.status; });
@@ -1550,18 +1633,8 @@ function renderReport(session, data) {
   document.getElementById("reportSkipped").textContent = skipped;
   document.getElementById("reportStreak").textContent = data.streak || 0;
 
-  const headline = completed === 7 ? "Today's<br>full bloom" :
-                  completed > 0   ? `A ${completed}-petal<br>bloom` :
-                                    "A quiet<br>pause";
-  document.getElementById("reportHeadline").innerHTML = headline;
-  document.getElementById("reportSub").textContent =
-    session.partial ? "Partial counts too" : "Breathe, relax a moment";
-
-  document.getElementById("reportReflect").textContent = reflectionFor(session, data);
+  document.getElementById("reportHeadline").textContent = session.partial ? "Session summary" : "Practice complete";
   renderMandala(session);
-
-  document.getElementById("streakNote").textContent =
-    (data.streak || 0) >= 3 ? "Nice rhythm" : "Keep this pace";
 
   const list = document.getElementById("reportList");
   list.innerHTML = "";
@@ -1669,6 +1742,7 @@ function phaseVisualFor(moveId, phase) {
 }
 
 function renderRhythmDots(total, activeIdx) {
+  document.getElementById("roundProgress").textContent = activeIdx < 0 ? total + " rounds" : "Round " + (activeIdx+1) + " of " + total;
   const el = document.getElementById("rhythmDots");
   el.innerHTML = "";
   for (let i = 0; i < total; i++) {
@@ -1741,132 +1815,107 @@ function fitCanvasToVideo(canvas, video) {
   const ctx = canvas.getContext("2d");
   ctx.setTransform(dpr,0,0,dpr,0,0);
   ctx.clearRect(0,0,w,h);
-  const t = containTransform(video.videoWidth, video.videoHeight, w, h);
-  ctx.setTransform(dpr*t.scale,0,0,dpr*t.scale,dpr*t.x,dpr*t.y);
   return true;
 }
 
-function drawMesh(canvas, video, landmarks) {
-  if (!fitCanvasToVideo(canvas, video)) return;
+function drawMesh(canvas, video, landmarks, showFeedback = false) {
+  if (!fitCanvasToVideo(canvas, video) || !landmarks?.[0]) return;
+  const raw = landmarks[0], w = video.videoWidth, h = video.videoHeight;
+  const frame = faceFrame(raw,w,h);
+  const face = measureFace(raw,State.blendshapes,w,h);
+  if (!frame || !face) return;
+  const pose = trackedSketch(raw,frame,w,h,face,State.calibration,State.blendshapes);
   const ctx = canvas.getContext("2d");
-  const w = video.videoWidth, h = video.videoHeight;
-
-
-  if (!landmarks || !landmarks.length) return;
-  const pts = landmarks[0];
-  const scale = Math.max(0.6, w / 640);
-  const frame = faceFrame(pts,w,h);
-  if (frame) {
-    const t = portraitTransform(frame,canvas.clientWidth,canvas.clientHeight), dpr = window.devicePixelRatio || 1;
-    ctx.setTransform(dpr*t.scale,0,0,dpr*t.scale,dpr*t.x,dpr*t.y);
-    drawTrackedHair(ctx,frame);
-  }
-
-  // Face oval — whisper-thin outer silhouette
-  drawSmoothContour(ctx, pts, CONTOURS.oval, w, h, {
-    close: true, stroke: "rgba(97,63,53,0.65)", lw: 0.9 * scale,
-  });
-
-  // Brows — thin closed arcs
-  drawSmoothContour(ctx, pts, CONTOURS.leftBrow, w, h, {
-    close: true, stroke: "rgba(97,63,53,0.55)", lw: 1.0 * scale,
-  });
-  drawSmoothContour(ctx, pts, CONTOURS.rightBrow, w, h, {
-    close: true, stroke: "rgba(97,63,53,0.55)", lw: 1.0 * scale,
-  });
-
-  // Nose bridge — subtle axis
-  drawSmoothContour(ctx, pts, CONTOURS.noseBridge, w, h, {
-    stroke: "rgba(97,63,53,0.2)", lw: 0.7 * scale,
-  });
-
-  // Eyes — crisper, closed
-  drawSmoothContour(ctx, pts, CONTOURS.leftEye, w, h, {
-    close: true, stroke: "rgba(97,63,53,0.78)", lw: 1.1 * scale,
-  });
-  drawSmoothContour(ctx, pts, CONTOURS.rightEye, w, h, {
-    close: true, stroke: "rgba(97,63,53,0.78)", lw: 1.1 * scale,
-  });
-
-  // Lips — the single colour accent on the whole model
-  drawSmoothContour(ctx, pts, CONTOURS.lipsOuter, w, h, {
-    close: true,
-    fill:   "rgba(196,95,63,0.12)",
-    stroke: "rgba(97,63,53,0.92)",
-    lw: 1.3 * scale,
-  });
-  drawSmoothContour(ctx, pts, CONTOURS.lipsInner, w, h, {
-    close: true, stroke: "rgba(97,63,53,0.32)", lw: 0.6 * scale,
-  });
-
-  drawSmoothContour(ctx, pts, [129,98,97,2,326,327,358], w,h,{stroke:"rgba(97,63,53,.65)",lw:scale});
-  for (const [center,edge,eye] of [[468,469,CONTOURS.leftEye],[473,474,CONTOURS.rightEye]]) {
-    if (!pts[center] || !pts[edge]) continue;
-    ctx.save(); ctx.beginPath();
-    eye.forEach((index,i) => { const p=pts[index]; if(i) ctx.lineTo(p.x*w,p.y*h); else ctx.moveTo(p.x*w,p.y*h); });
-    ctx.closePath();ctx.clip();
-    const c=pts[center], e=pts[edge], r=Math.hypot((c.x-e.x)*w,(c.y-e.y)*h);
-    ctx.beginPath();ctx.arc(c.x*w,c.y*h,r,0,Math.PI*2);ctx.strokeStyle="#805d4c";ctx.lineWidth=scale;ctx.stroke();
-    ctx.beginPath();ctx.arc(c.x*w,c.y*h,r*.4,0,Math.PI*2);ctx.fillStyle="#613f35";ctx.fill();ctx.restore();
-  }
-
+  ctx.save();
+  fitSketch(ctx,canvas.clientWidth,canvas.clientHeight,Math.max(-.15,Math.min(.15,face.roll)));
+  renderSketch(ctx,pose);
+  if (showFeedback) drawFaceFeedback(ctx,pose);
+  ctx.restore();
 }
 
-// Draws a smooth curve through the landmark path using quadratic
-// Bezier midpoints. Any missing landmark is skipped silently.
-function drawSmoothContour(ctx, pts, indices, w, h, opts) {
-  const path = [];
-  for (const i of indices) {
-    const p = pts[i];
-    if (!p) continue;
-    path.push([p.x * w, p.y * h]);
-  }
-  if (path.length < 2) return;
+// Each mark has a tracked anchor, direction (x, y), and offset in portrait units.
+// Paired cheek rings mark where to maintain a timed hold.
+const INWARD_LIPS = [[61,1,0,-5,0],[291,-1,0,5,0]];
+const OUTWARD_LIPS = [[61,-1,0,-17,0],[291,1,0,17,0]];
+const LOWER_JAW = [[152,0,1,11,3]];
+const FACE_MARKS = {
+  "round-lips": INWARD_LIPS, u: INWARD_LIPS,
+  "widen-lips": OUTWARD_LIPS, e: OUTWARD_LIPS,
+  "lower-jaw": LOWER_JAW, a: LOWER_JAW,
+  "lift-jaw": [[152,0,-1,11,-9]],
+  left: [[291,1,0,18,0]], right: [[61,-1,0,-18,0]],
+  up: [[291,0,-1,8,-12]], down: [[291,0,1,8,12]],
+  tongue_left_up: [[425,0,-1,0,-6]], tongue_left_down: [[425,0,1,0,6]],
+  tongue_right_up: [[205,0,-1,0,-6]], tongue_right_down: [[205,0,1,0,6]],
+  air_left: [[425,1,0,2,0]], air_right: [[205,-1,0,-2,0]],
+  draw_in: [[205,1,0,5,0],[425,-1,0,-5,0]],
+  release: [[205,-1,0,-5,0],[425,1,0,5,0]],
+  hold: [[205,0,0,0,0],[425,0,0,0,0]],
+};
 
+// Draw in the portrait's own coordinate system so camera mirroring, zoom
+// and head movement affect the ink and the cue together.
+function drawFaceFeedback(ctx, pose) {
+  const gate = State.phaseGate;
+  const cue = gate ? gate.cue : State.active?.guideCue;
+  const now = performance.now();
+  const ripple = State.lipRippleAt == null ? 1 : (now - State.lipRippleAt) / 480;
+  if (ripple >= 1 && !cue) return;
+
+  const {x:cx,y:cy,width,height} = mouthBounds(pose);
+  const unit = 2.5;
+  const anchors = {
+    61:[cx-width/2,cy], 291:[cx+width/2,cy], 152:[433,785],
+    205:[433-146*pose.faceWidth-pose.cheekL,633],425:[433+146*pose.faceWidth+pose.cheekR,633]
+  };
+  const still = reducedMotion();
   ctx.save();
-  ctx.beginPath();
-  if (path.length >= 3) {
-    const n = path.length;
-    const start = opts.close
-      ? [(path[n-1][0] + path[0][0]) / 2, (path[n-1][1] + path[0][1]) / 2]
-      : path[0];
-    ctx.moveTo(start[0], start[1]);
-    for (let i = 0; i < n - 1; i++) {
-      const [cx, cy] = path[i];
-      const [nx, ny] = path[i + 1];
-      ctx.quadraticCurveTo(cx, cy, (cx + nx) / 2, (cy + ny) / 2);
-    }
-    if (opts.close) {
-      const [cx, cy] = path[n - 1];
-      ctx.quadraticCurveTo(cx, cy, (cx + path[0][0]) / 2, (cy + path[0][1]) / 2);
-      ctx.closePath();
-    } else {
-      const [cx, cy] = path[n - 1];
-      ctx.lineTo(cx, cy);
+  ctx.lineCap = ctx.lineJoin = "round";
+  if (ripple < 1 || (gate && cue === "hold")) {
+    ctx.strokeStyle = "#697442";
+    if (ripple < 1) {
+      const radius = width/2;
+      const spread = (still ? 3 : 2 + 11*ripple) * unit;
+      ctx.globalAlpha = .85*(1-ripple);
+      ctx.lineWidth = 1.8*unit;
+      ctx.beginPath();
+      ctx.ellipse(cx,cy,radius+spread,height/2+spread,0,0,2*Math.PI);
+      ctx.stroke();
+    } else if (gate.fill > 0) {
+      ctx.lineWidth = 2.3*unit;
+      traceLipHold(ctx,pose,gate.fill);
     }
   } else {
-    ctx.moveTo(path[0][0], path[0][1]);
-    ctx.lineTo(path[1][0], path[1][1]);
-  }
-
-  if (opts.fill) {
-    ctx.fillStyle = opts.fill;
-    ctx.fill();
-  }
-  if (opts.stroke) {
-    ctx.strokeStyle = opts.stroke;
-    ctx.lineWidth = opts.lw || 1;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.stroke();
+    // Directions are in unmirrored source coordinates. Increasing x appears
+    // on the user's left in the line portrait, just as in the guide illustration.
+    const marks = FACE_MARKS[cue];
+    const drift = still ? 0 : 1.5 * Math.sin((now - (gate?.cueSince ?? State.active.startedAt))/180);
+    for (const [anchor,dx,dy,offsetX,offsetY] of marks || []) {
+      const [x,y] = anchors[anchor];
+      ctx.save();
+      ctx.translate(x,y);
+      ctx.scale(unit,unit);
+      ctx.translate(offsetX+dx*drift,offsetY+dy*drift);
+      ctx.strokeStyle = ctx.fillStyle = "#aa5b40";
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      if (dx || dy) {
+        ctx.rotate(Math.atan2(dy,dx));
+        ctx.moveTo(-12,1); ctx.quadraticCurveTo(-6,-1,0,0);
+        ctx.moveTo(-4,-3.5); ctx.lineTo(0,0); ctx.lineTo(-4,3.5);
+        ctx.stroke();
+        if (cue.startsWith("tongue_")) {
+          ctx.beginPath(); ctx.arc(4,0,1.7,0,2*Math.PI); ctx.fill();
+        }
+      } else {
+        ctx.arc(0,0,3.5,0,2*Math.PI); ctx.stroke();
+      }
+      ctx.restore();
+    }
   }
   ctx.restore();
 }
 
-// =====================================================
-// Aurora responder — ambient background reacts to blendshapes.
-// Writes CSS variables; CSS maps them to blob opacity, blur, hue.
-// =====================================================
 function updateAurora() {
   const bs = State.blendshapes;
   const smile = ((bs.mouthSmileLeft || 0) + (bs.mouthSmileRight || 0)) / 2;
@@ -1949,31 +1998,7 @@ function renderMandala(session) {
   });
 }
 
-function reflectionFor(session, data) {
-  const c = session.moves.filter((m) => m.status === "completed").length;
-  const p = session.moves.filter((m) => m.status === "partial").length;
-  const anyDone = c + p > 0;
-  const streak = data.streak || 0;
-  const matchedSec = Math.round((State.observations?.matchedMs || 0) / 1000);
 
-  if (!anyDone) return "Rest is practice too. Come back tomorrow.";
-
-  if (c === 7) {
-    if (streak <= 1) return "Full seven, first time through. Save this feeling.";
-    if (streak >= 7) return `Seven moves, ${streak} days. The habit is here.`;
-    return "You stayed with every move today.";
-  }
-  if (c >= 4) {
-    return matchedSec > 5
-      ? "A steady session — your lips really found the shapes a few times."
-      : "A steady session. The ones that fit today, you kept.";
-  }
-  if (c >= 1) {
-    if (matchedSec > 3) return "Short, but a couple of moves really landed.";
-    return "You showed up. Shorter is still practice.";
-  }
-  return "Softer today. Tomorrow is a new one.";
-}
 
 // Expose the pieces the test harness needs to drive the pipeline
 // without a camera. Only ever imported by test.html / test.js.
@@ -1986,7 +2011,7 @@ window.FaceYoga = {
   AudioEngine,
   show,
   startSession,
-  runDemo, runReady, pauseExercise, resumeExercise, handleSelfResult, setFaceView, scheduleCue, clearPhaseTimers,
+  runDemo, beginCountdown, runReady, pauseExercise, resumeExercise, handleSelfResult, setFaceView, scheduleCue, clearPhaseTimers,
   runActive,
   runActiveDetection,
   runActivePaced,

@@ -79,7 +79,7 @@ export function evaluatePose(moveId, phase, f, c) {
   if (!canMatch(moveId, c)) return fail('Guided practice — calibration is incomplete.');
   if (!steadyHead(f, c.neutral)) return fail('Face forward and keep your head still.');
   const n = c.neutral;
-  let score = 0, hint = '';
+  let score = 0, hint = '', correction = null;
   if (moveId.startsWith('pucker_')) {
     const axis = phase === 'left' || phase === 'right' ? 'x' : 'y';
     const sign = phase === 'left' || phase === 'down' ? 1 : -1;
@@ -89,25 +89,31 @@ export function evaluatePose(moveId, phase, f, c) {
     const rounded = roundScore(f, c);
     // Separate shape and direction; large valid movements never fall back to zero.
     score = Math.min(position, rounded);
+    correction = rounded < .65 ? 'round-lips' : phase;
     hint = rounded < .65 ? 'Keep the lips rounded, with the corners drawn inward.'
       : `Move your lips ${phase === "up" ? "upward" : phase === "down" ? "downward" : "to your " + phase}; keep your head still.`;
   } else if (phase === 'a') {
     score = Math.max(reach(f.jaw-n.jaw, Math.max(.055,(c.a.jaw-n.jaw)*.7), .02),
       reach(f.gap-n.gap, Math.max(.035,(c.a.gap-n.gap)*.7), .012));
+    correction = 'lower-jaw';
     hint = 'Lower your jaw gently. Make a tall opening, without rounding forward.';
   } else if (phase === 'u') {
     score = roundScore(f, c);
-    if (f.jaw > c.u.jaw+.18 || f.gap > c.u.gap+.09) score = 0;
-    hint = f.jaw > c.u.jaw+.18 || f.gap > c.u.gap+.09
+    const tooOpen = f.jaw > c.u.jaw+.18 || f.gap > c.u.gap+.09;
+    if (tooOpen) score = 0;
+    correction = tooOpen ? 'lift-jaw' : 'round-lips';
+    hint = tooOpen
       ? 'Bring your jaw closer; keep a small, round opening.'
       : 'Draw the corners inward and bring your lips gently forward.';
   } else if (phase === 'e') {
     score = Math.max(reach(f.smile-n.smile, Math.max(.06,(c.e.smile-n.smile)*.7), .02),
       reach(f.width-n.width, Math.max(.03,(c.e.width-n.width)*.7), .01));
-    if (f.jaw > c.e.jaw+.18) score = 0;
-    hint = f.jaw > c.e.jaw+.18 ? 'Bring your jaw closer; widen the corners sideways.' : 'Widen both corners into a soft E. Keep your jaw relaxed.';
+    const tooOpen = f.jaw > c.e.jaw+.18;
+    if (tooOpen) score = 0;
+    correction = tooOpen ? 'lift-jaw' : 'widen-lips';
+    hint = tooOpen ? 'Bring your jaw closer; widen the corners sideways.' : 'Widen both corners into a soft E. Keep your jaw relaxed.';
   }
-  return { precision: score, hint: score >= .65 ? 'Shape found — hold gently.' : hint };
+  return { precision: score, correction: score >= .65 ? null : correction, hint: score >= .65 ? 'Shape found — hold gently.' : hint };
 }
 // A continuous hold is required; camera gaps and wrong poses cannot accumulate credit.
 export function advanceHold(fill, score, elapsedMs, paused = false) {
