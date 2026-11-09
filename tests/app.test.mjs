@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 import * as tracking from '../tracking.mjs';
 import * as guidance from '../guidance.mjs';
 import * as portrait from '../portrait.mjs';
+import * as experience from '../experience.mjs';
 const source = readFileSync(new URL('../app.js',import.meta.url),'utf8').replace(/import\s*\{[\s\S]*?\}\s*from\s*"[^"]+";/g,'');
 const routine = JSON.parse(readFileSync(new URL('../routine.v2.json',import.meta.url)));
 const n={x:.015,y:.44,width:.5,gap:.025,jaw:.02,pucker:.02,smile:.01,yaw:0,pitch:.3,roll:0};
@@ -25,11 +26,12 @@ function detection(f) {
 function boot() {
   let time=1000,raf=null,frame=profile.neutral,nextTimer=1;
   const timers=new Map();
+  const storage=new Map();
   const elements=new Map();
   const transforms=[];
   const ctx=new Proxy({}, {get:(_,key)=>key==='setTransform'? (...args)=>transforms.push(args) : key==='createRadialGradient'?()=>({addColorStop(){}}):()=>{}});
   function element(id) {
-    if(!elements.has(id)) elements.set(id,{hidden:true,style:{},dataset:{},textContent:'',innerHTML:'',value:0,
+    if(!elements.has(id)) elements.set(id,{hidden:true,style:{setProperty(){}},dataset:{},textContent:'',innerHTML:'',value:0,
       clientWidth:360,clientHeight:260,width:0,height:0,videoWidth:640,videoHeight:480,currentTime:1,readyState:4,
       classList:{add(){},remove(){},toggle(){}},setAttribute(){},appendChild(){},remove(){},getContext:()=>ctx,
       querySelectorAll:()=>[],querySelector:()=>element('button'),play:()=>Promise.resolve(),pause(){}});
@@ -37,8 +39,9 @@ function boot() {
   }
   const document={hidden:false,getElementById:element,querySelector:element,querySelectorAll:()=>[],
     createElement:element,body:element('body'),documentElement:element('root'),addEventListener(){}};
-  const sandbox={...tracking,...guidance,...portrait,animatePortrait:()=>({cancel(){},pause(){},resume(){}}),console,URLSearchParams,document,location:{search:'?test=1',pathname:'/'},
+  const sandbox={...tracking,...guidance,...portrait,...experience,animatePortrait:()=>({cancel(){},pause(){},resume(){}}),console,URLSearchParams,document,location:{search:'?test=1',pathname:'/'},
     window:{__faceYogaTest:true,devicePixelRatio:2,scrollTo(){}},navigator:{},performance:{now:()=>time},
+    localStorage:{getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value)},
     setTimeout:(fn,ms)=>{const id=nextTimer++;timers.set(id,{fn,at:time+ms});return id;},setInterval:()=>1,clearTimeout:id=>timers.delete(id),clearInterval(){},
     requestAnimationFrame:fn=>{raf=fn;return 2;},cancelAnimationFrame:()=>{raf=null;},
     fetch:async()=>({json:async()=>structuredClone(routine)})};
@@ -58,7 +61,7 @@ function boot() {
     if(f) Object.assign(FY.State.blendshapes,{jawOpen:f.jaw,mouthPucker:f.pucker,mouthSmileLeft:f.smile,mouthSmileRight:f.smile});
     FY.advanceGate();
   }
-  return {FY,element,tick,transforms,elapse(ms){const end=time+ms;let loops=0;while(loops++<1000){const next=[...timers].filter(([id,t])=>t.at<=end).sort((a,b)=>a[1].at-b[1].at)[0];if(!next)break;time=next[1].at;timers.delete(next[0]);next[1].fn();}time=end;},calibTick(f,ms=50){time+=ms;frame=f;element('calibVideo').currentTime+=ms/1000;const cb=raf;raf=null;cb?.();}};
+  return {FY,element,tick,transforms,storage,elapse(ms){const end=time+ms;let loops=0;while(loops++<1000){const next=[...timers].filter(([id,t])=>t.at<=end).sort((a,b)=>a[1].at-b[1].at)[0];if(!next)break;time=next[1].at;timers.delete(next[0]);next[1].fn();}time=end;},calibTick(f,ms=50){time+=ms;frame=f;element('calibVideo').currentTime+=ms/1000;const cb=raf;raf=null;cb?.();}};
 }
 test('a full left/right cycle requires both sides; all four cycles complete',()=>{
   const {FY,tick}=boot();FY.runActive(routine.moves[0]);
@@ -280,4 +283,26 @@ test('timed cheek guidance follows every scheduled phase and ends with self conf
     }
     assert.equal(FY.State.active,null);assert.equal(element('selfcheck').hidden,false);
   }
+});
+
+
+test('selected three-move practice saves its plan and reports the correct movement definitions',()=>{
+  const {FY,element,storage}=boot();
+  FY.State.selectedPlan='quick';
+  FY.startSession('guided');
+  assert.deepEqual(Array.from(FY.State.session.moves,m=>m.id),['vowel_a_u','air_side_to_side','cheek_draw_in']);
+  assert.equal(element('moveTotal').textContent,3);
+  FY.State.session.moves.forEach(m=>{m.status='completed';m.userConfirmed=true;});
+  FY.finishSession();
+  const saved=JSON.parse(storage.get('faceyoga.v2'));
+  assert.equal(saved.sessions.length,1);assert.equal(saved.sessions[0].planId,'quick');
+  assert.equal(saved.streak,1);assert.equal(element('reportCompleted').textContent,3);
+  assert.match(element('li').innerHTML,/Draw in, release, then hold/);
+  assert.match(element('li').innerHTML,/Self-confirmed/);
+});
+test('ending a selected practice before any completion does not award a streak',()=>{
+  const {FY,storage}=boot();FY.State.selectedPlan='classic';FY.startSession('guided');FY.finishSession(true);
+  const saved=JSON.parse(storage.get('faceyoga.v2'));
+  assert.equal(saved.sessions[0].moves.length,5);assert.equal(saved.sessions[0].partial,true);
+  assert.ok(saved.sessions[0].moves.every(m=>m.status==='skipped'));assert.equal(saved.streak,undefined);
 });

@@ -1,3 +1,5 @@
+> Current prototype flow and implemented/mock boundaries: [PROTOTYPE-FLOW.md](PROTOTYPE-FLOW.md). The original concept below includes superseded screens and planned AI behavior.
+
 # Face Yoga Prototype — Brief
 
 Mobile web app: a short, game-like face yoga break. The front camera tracks visible facial movements and gives live feedback. A rest ritual, not a beauty product. No beauty claims.

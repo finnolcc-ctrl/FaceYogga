@@ -2,16 +2,15 @@
 // Spec: CLAUDE_HANDOFF v0.2 + routine.v2.json.
 // Camera matching uses per-session calibration; uncalibrated moves stay guided.
 
-import {
-  FaceLandmarker,
-  FilesetResolver,
-} from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.1.0/vision_bundle.mjs";
-
 import { measureFace, medianSample, calibrationIssue, samplesAreStable, canMatch,
   evaluatePose, advanceHold } from "./tracking.mjs";
-import { POSES, CALIBRATION_STEPS, mouthDiagram, calibrationDiagram, guideKey, guidePoseKeys, guideSequence } from "./guidance.mjs";
+import { POSES, CALIBRATION_STEPS, calibrationDiagram, guideKey, guidePoseKeys, guideSequence } from "./guidance.mjs";
 
 import { portraitSVG, animatePortrait, faceFrame, trackedSketch, renderSketch, fitSketch, mouthBounds, traceLipHold } from "./portrait.mjs";
+
+import { PLANS, practiceMoves, practiceStats, createExperience } from "./experience.mjs";
+
+let Experience;
 
 const STORAGE_KEY = "faceyoga.v2";
 const MP_VERSION = "1.1.0";
@@ -101,7 +100,7 @@ const Stickers = { setup: null, exercise: null };
 
 // -------- State --------
 const State = {
-  routine: null,
+  routine: null, selectedPlan: "full",
   faceView: "line", intro: false, guideMotion: null, replayMotion: null, guideSVG: null,
   scheduled: {},
   mode: "guided",          // "guided" | "camera_assisted_candidate"
@@ -140,221 +139,15 @@ async function init() {
   bindExerciseDialogs();
   renderHome();
   renderPreviewList();
-  bootOnboarding();
+  Experience = createExperience({State, Actions, show, loadStore, saveStore, renderHome, renderPreviewList, renderReport, portraitSVG});
+  Experience.boot();
 
   document.addEventListener("visibilitychange", () => {
+    document.body.classList.toggle("page-hidden", document.hidden);
     if (document.visibilityState === "hidden" && State.session && !State.paused) {
       pauseExercise(true);
     }
   });
-}
-
-// -------- Onboarding boot & state --------
-const ONBOARDING_FLOW = ["welcome", "goals", "about", "privacy", "faceScan", "teachMoves", "plan"];
-const ONB_STORAGE_KEY = "faceyoga.onboarded";
-const ONB_PROFILE_KEY = "faceyoga.profile";
-
-// Onboarding is finished but not yet released — flip to true when the
-// rest of the app is ready. In the meantime visit ?onboarding=1 to preview.
-const ENABLE_ONBOARDING = false;
-
-function bootOnboarding() {
-  State.onboarding = loadOnboarding();
-  const forcePreview = new URLSearchParams(location.search).get("onboarding") === "1";
-  if (!ENABLE_ONBOARDING && !forcePreview) {
-    show("home");
-    return;
-  }
-  const done = localStorage.getItem(ONB_STORAGE_KEY) === "true";
-  if (done && !forcePreview) {
-    show("home");
-  } else {
-    show("welcome");
-  }
-}
-
-function loadOnboarding() {
-  try {
-    const raw = localStorage.getItem(ONB_PROFILE_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch {}
-  return {
-    goals: [],
-    name: "Mia",
-    experience: "new",
-    dailyMinutes: 4,
-    reminderTime: "20:30",
-    privacy: { camera: true, save: true, reminders: false, stats: false },
-  };
-}
-
-function saveOnboarding() {
-  try { localStorage.setItem(ONB_PROFILE_KEY, JSON.stringify(State.onboarding)); } catch {}
-}
-
-function currentOnbIndex() {
-  const active = document.querySelector(".onb:not([hidden])")?.dataset.screen;
-  return ONBOARDING_FLOW.indexOf(active);
-}
-
-function onbGoto(delta) {
-  const i = currentOnbIndex();
-  const next = i + delta;
-  if (next < 0) return;
-  if (next >= ONBOARDING_FLOW.length) {
-    completeOnboarding();
-    return;
-  }
-  show(ONBOARDING_FLOW[next]);
-  onEnterOnbStep(ONBOARDING_FLOW[next]);
-}
-
-function onEnterOnbStep(step) {
-  if (step === "faceScan") startFaceScan();
-  if (step === "teachMoves") startCalibCountdown();
-  if (step === "plan") {
-    document.getElementById("onbPlanName").textContent = (State.onboarding.name || "Mia").toUpperCase();
-    document.getElementById("onbPlanMin").textContent = State.onboarding.dailyMinutes;
-  }
-}
-
-function attachCameraToElement(videoEl, stageEl) {
-  if (!videoEl || !stageEl) return;
-  if (State.cameraStream) {
-    try {
-      videoEl.srcObject = State.cameraStream;
-      videoEl.play().catch(() => {});
-      stageEl.classList.add("is-active");
-    } catch {}
-  } else {
-    stageEl.classList.remove("is-active");
-  }
-}
-
-async function ensureCameraStream() {
-  if (State.cameraStream) return State.cameraStream;
-  try {
-    State.cameraStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
-      audio: false,
-    });
-    return State.cameraStream;
-  } catch {
-    return null;
-  }
-}
-
-function completeOnboarding() {
-  State.onboarding.name = document.getElementById("onbName")?.value || State.onboarding.name;
-  State.onboarding.reminderTime = document.getElementById("onbReminder")?.value || State.onboarding.reminderTime;
-  saveOnboarding();
-  localStorage.setItem(ONB_STORAGE_KEY, "true");
-  // Release the onboarding camera so the exercise flow can request its own
-  if (State.cameraStream) {
-    State.cameraStream.getTracks().forEach((t) => t.stop());
-    State.cameraStream = null;
-  }
-  if (State.onbScanTimer) { clearInterval(State.onbScanTimer); State.onbScanTimer = null; }
-  if (State.onbCalibTimer) { clearInterval(State.onbCalibTimer); State.onbCalibTimer = null; }
-  renderHome();
-  show("home");
-}
-
-// Goals grid
-function toggleGoal(key, btn) {
-  const g = State.onboarding.goals;
-  const idx = g.indexOf(key);
-  if (idx >= 0) g.splice(idx, 1); else g.push(key);
-  btn.setAttribute("aria-pressed", idx < 0 ? "true" : "false");
-}
-
-// Experience / time pills
-function pickPill(groupId, val) {
-  const group = document.getElementById(groupId);
-  if (!group) return;
-  group.querySelectorAll(".onb-pill").forEach((p) => {
-    const selected = p.dataset.val === String(val);
-    p.classList.toggle("is-selected", selected);
-    p.setAttribute("aria-pressed", String(selected));
-  });
-}
-
-// Face-scan — attaches live camera into the stage, walks fake percent to 100,
-// then unlocks the Continue button
-async function startFaceScan() {
-  const stage = document.querySelector('.screen[data-screen="faceScan"] .onb-scan-stage');
-  const video = document.getElementById("onbScanVideo");
-  const pctEl = document.getElementById("onbScanPct");
-  const btn   = document.getElementById("onbScanNext");
-  const btnText = document.getElementById("onbScanBtnText");
-  if (!stage || !pctEl || !btn) return;
-
-  await ensureCameraStream();
-  attachCameraToElement(video, stage);
-
-  let pct = 0;
-  if (State.onbScanTimer) clearInterval(State.onbScanTimer);
-  pctEl.textContent = "0%";
-  btn.classList.add("onb-btn-primary--idle");
-  btnText.textContent = "Hold still...";
-  State.onbScanTimer = setInterval(() => {
-    pct = Math.min(100, pct + (3 + Math.random() * 4));
-    pctEl.textContent = Math.round(pct) + "%";
-    if (pct >= 100) {
-      clearInterval(State.onbScanTimer);
-      btn.classList.remove("onb-btn-primary--idle");
-      btnText.textContent = "Continue";
-    }
-  }, 180);
-}
-
-// Calibration countdown — 3 → 2 → 1 → next pose
-const CALIB_POSES = [
-  { move: "smile", cue: "Make a soft smile, lips closed" },
-  { move: "brow",  cue: "Lift your brows gently" },
-  { move: "cheek", cue: "Puff your cheeks softly" },
-];
-async function startCalibCountdown() {
-  const stage = document.querySelector('.screen[data-screen="teachMoves"] .onb-calib-stage');
-  const video = document.getElementById("onbCalibVideo");
-  await ensureCameraStream();
-  attachCameraToElement(video, stage);
-
-  if (State.onbCalibTimer) clearInterval(State.onbCalibTimer);
-  State.onbCalibIdx = 0;
-  stepCalibPose();
-}
-function stepCalibPose() {
-  const pose = CALIB_POSES[State.onbCalibIdx];
-  const countEl = document.getElementById("onbCalibCount");
-  const cueEl   = document.getElementById("onbCalibCue");
-  const arcEl   = document.getElementById("onbCalibArc");
-  if (!pose || !countEl) return;
-  cueEl.textContent = pose.cue;
-  document.getElementById("onbPoseDiagram").innerHTML = mouthDiagram(pose.move);
-  document.querySelectorAll("#onbCalibChips .onb-chip").forEach((c) => {
-    const done = CALIB_POSES.slice(0, State.onbCalibIdx + 1).some((p) => p.move === c.dataset.move);
-    c.classList.toggle("onb-chip--done", done);
-    c.classList.toggle("onb-chip--outline", !done);
-  });
-  let n = 3;
-  countEl.textContent = n;
-  if (arcEl) {
-    arcEl.setAttribute("stroke-dashoffset", "427");
-    requestAnimationFrame(() => arcEl.setAttribute("stroke-dashoffset", "0"));
-  }
-  State.onbCalibTimer = setInterval(() => {
-    n--;
-    if (n <= 0) {
-      clearInterval(State.onbCalibTimer);
-      State.onbCalibIdx++;
-      if (State.onbCalibIdx < CALIB_POSES.length) {
-        setTimeout(stepCalibPose, 450);
-      }
-    } else {
-      countEl.textContent = n;
-    }
-  }, 900);
 }
 
 // -------- Screen router --------
@@ -418,7 +211,8 @@ function bindExerciseDialogs() {
 }
 
 const Actions = {
-  startSession:   () => { renderPreviewList(); show("preview"); },
+  startSession:   () => { State.previewOrigin = "home"; State.selectedPlan = "full"; renderPreviewList(); show("preview"); },
+  startFullPractice: () => { State.previewOrigin = "direct"; State.selectedPlan = "full"; Actions.toCameraChoice(); },
   quickPractice: () => show("quickChoice"),
   quickGuided: () => { stopCamera(); startSession("guided", true); },
   quickCamera: () => beginCameraSetup(true),
@@ -429,7 +223,8 @@ const Actions = {
   flowPrevious:  () => scrollFlow(-1),
   flowNext:      () => scrollFlow(1),
   goHome:         () => { teardownExercise(); show("home"); renderHome(); },
-  toPreview:      () => show("preview"),
+  toPreview: () => State.previewOrigin === "direct" ? Actions.goHome() : State.previewOrigin === "plan" ? Actions.returnToPlan() : show("preview"),
+  backFromPreview: () => State.previewOrigin === "plan" ? Actions.openPlan() : Actions.goHome(),
   toCameraChoice: () => { stopCamera(); show("cameraChoice"); },
   chooseGuided:   () => { State.mode = "guided"; stopCamera(); startSession("guided"); },
   chooseCamera:   () => beginCameraSetup(),
@@ -437,6 +232,7 @@ const Actions = {
   togglePause:    () => (State.paused ? resumeExercise() : pauseExercise(false)),
   resume:         () => resumeExercise(),
   endSession:     () => endSessionConfirm(),
+  skipPausedMove: () => { resumeExercise(); Actions.skipMove(); },
   skipMove:       () => handleSelfResult("skipped"),
   replayDemo:     () => showDemoOverlay(),
   demoDone:       () => hideDemoOverlay(),
@@ -453,64 +249,9 @@ const Actions = {
     else window.speechSynthesis?.cancel();
   },
 
-  // ----- Onboarding -----
-  onbStart:       () => onbGoto(1),
-  onbNext:        () => {
-    const step = document.querySelector(".onb:not([hidden])")?.dataset.screen;
-    if (step === "about") {
-      const nameInput = document.getElementById("onbName");
-      if (nameInput) State.onboarding.name = nameInput.value.trim() || "Mia";
-    }
-    onbGoto(1);
-  },
-  onbBack:        () => onbGoto(-1),
-  onbAllowCamera: async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
-      State.cameraStream = stream;
-      State.onboarding.privacy.camera = true;
-    } catch {
-      State.onboarding.privacy.camera = false;
-    }
-    onbGoto(1);
-  },
-  onbComplete:    () => completeOnboarding(),
-  onbEditPlan:    () => onbGoto(-1),
 };
 
-// Delegate pointer handlers for goals / pills / toggles
-document.addEventListener("click", (e) => {
-  const goal = e.target.closest("[data-goal]");
-  if (goal) {
-    toggleGoal(goal.dataset.goal, goal);
-    return;
-  }
-  const pill = e.target.closest(".onb-pill-row .onb-pill");
-  if (pill) {
-    const group = pill.closest(".onb-pill-row");
-    const val = pill.dataset.val;
-    if (group?.id === "onbExperience") { State.onboarding.experience = val; pickPill("onbExperience", val); }
-    if (group?.id === "onbTime")       { State.onboarding.dailyMinutes = Number(val); pickPill("onbTime", val); }
-  }
-});
-document.addEventListener("input", (e) => {
-  if (e.target?.id === "onbReminder" && State.onboarding) {
-    State.onboarding.reminderTime = e.target.value;
-    const mirror = document.getElementById("onbReminderTime2");
-    if (mirror) mirror.textContent = e.target.value;
-  }
-});
-// Toggle rows
-document.addEventListener("change", (e) => {
-  const inp = e.target.closest(".onb-toggle input[type=checkbox]");
-  if (inp && State.onboarding?.privacy) {
-    State.onboarding.privacy[inp.dataset.key] = inp.checked;
-  }
-});
-
-// =========================================================
-// HOME
-// =========================================================
+// Home
 function scrollFlow(direction) {
   const list = document.getElementById("movesPreviewHome");
   list.scrollBy({ left: direction * list.clientWidth * .85,
@@ -519,8 +260,10 @@ function scrollFlow(direction) {
 
 function renderHome() {
   const data = loadStore();
-  const total  = data.sessions?.length || 0;
+  const stats = practiceStats(data.sessions);
+  const total = stats.sessions;
 
+  document.getElementById("homePortrait").innerHTML = portraitSVG("neutral", "");
   document.getElementById("homeDate").textContent = formatDate(new Date());
   document.getElementById("totalSessions").textContent = total;
 
@@ -528,7 +271,7 @@ function renderHome() {
   const dotsEl = document.getElementById("weekDots");
   dotsEl.innerHTML = "";
   const today = new Date(); today.setHours(0,0,0,0);
-  const activeDates = new Set((data.sessions || []).map(s => s.date));
+  const activeDates = new Set((data.sessions || []).filter(s => s.moves.some(m => m.status === "completed")).map(s => s.date));
   for (let i = 6; i >= 0; i--) {
     const d = new Date(today); d.setDate(d.getDate() - i);
     const span = document.createElement("span");
@@ -539,10 +282,7 @@ function renderHome() {
     if (i === 0) span.classList.add("today");
     dotsEl.appendChild(span);
   }
-  const doneThisWeek = [...activeDates].filter(d => {
-    const dt = new Date(d);
-    return (today - dt) <= 6 * 86400000;
-  }).length;
+  const doneThisWeek = stats.week.filter(d => d.active).length;
   document.getElementById("weekSummary").textContent = doneThisWeek > 0 ? `${doneThisWeek} this week` : "0 this week";
 
   // Mini moves preview
@@ -560,14 +300,17 @@ function renderHome() {
   });
 }
 
-function renderPreviewList() {
-  const list = document.getElementById("movesListFull");
+function renderPreviewList(target = "movesListFull") {
+  const list = document.getElementById(target);
   list.innerHTML = "";
-  State.routine.moves.forEach((m) => {
+  const plan = PLANS[State.selectedPlan] || PLANS.full;
+  document.getElementById("previewTitle").textContent = plan.title;
+  document.getElementById("previewSummary").textContent = `${practiceMoves(State.routine, State.selectedPlan).length} moves · About ${plan.minutes} minutes`;
+  practiceMoves(State.routine, State.selectedPlan).forEach((m, index) => {
     const li = document.createElement("li");
-    const mode = m.preferredMode === "camera_assisted_candidate" ? "Optional camera" : "Guided";
+    const mode = DETECTION_MOVES.has(m.id) ? "Camera feedback or timed guide" : "Timed guide · self-confirmed";
     li.innerHTML = `
-      <span class="idx">${m.order}</span>
+      <span class="idx">${index + 1}</span>
       <span class="meta">
         <span class="ttl">${m.title.en}</span>
         <span class="mode">${mode}</span>
@@ -607,6 +350,8 @@ async function beginCameraSetup(quick = false) {
     if (setupId !== State.cameraSetupId) return;
     statusEl.textContent = "Loading model…";
     if (!State.landmarker) {
+      const { FaceLandmarker, FilesetResolver } = await import(`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VERSION}/vision_bundle.mjs`);
+      if (setupId !== State.cameraSetupId) return;
       const vision = await FilesetResolver.forVisionTasks(
         `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VERSION}/wasm`
       );
@@ -731,7 +476,7 @@ function beginCalibration() {
   State.calibrationRun = run;
   const present = () => {
     const key = steps[run.index];
-    document.getElementById("calibStep").textContent = `${run.index+1} / ${steps.length} · your comfortable range`;
+    document.getElementById("calibStep").textContent = `${run.index+1} / ${steps.length}`;
     document.getElementById("calibCue").textContent = POSES[key].title;
     document.getElementById("calibSub").textContent = POSES[key].detail;
     document.getElementById("calibIllustration").innerHTML = calibrationDiagram(key);
@@ -835,7 +580,7 @@ function currentFace() {
 // EXERCISE SESSION
 // =========================================================
 function startSession(mode, quick = false, quickMove = "pucker_side_to_side") {
-  const moves = quick ? State.routine.moves.filter(m => m.id === quickMove) : State.routine.moves;
+  const moves = quick ? State.routine.moves.filter(m => m.id === quickMove) : practiceMoves(State.routine, State.selectedPlan);
   State.mode = mode;
   State.paused = false;
   setFaceView("line");
@@ -844,6 +589,7 @@ function startSession(mode, quick = false, quickMove = "pucker_side_to_side") {
     date: iso(new Date()),
     mode,
     routineVersion: State.routine.routineVersion,
+    planId: quick ? "single" : State.selectedPlan,
     moveIndex: -1,
     quick,
     moves: moves.map((m) => ({
@@ -858,7 +604,7 @@ function startSession(mode, quick = false, quickMove = "pucker_side_to_side") {
   };
   State.observations = { matchedMs: 0, smileWarmth: 0, samples: 0 };
 
-  document.getElementById("pauseBtn").textContent = "II";
+  document.getElementById("pauseBtn").textContent = "Pause";
   document.getElementById("pauseBtn").setAttribute("aria-label","Pause");
   requestWakeLock();
   show("exercise");
@@ -1517,7 +1263,7 @@ function pauseExercise(fromVisibility) {
   if (State.phaseGate) State.phaseGate.fill = 0;
   renderHoldProgress();
   document.getElementById("pauseOverlay").hidden = fromVisibility ? true : false;
-  document.getElementById("pauseBtn").textContent = "▶";
+  document.getElementById("pauseBtn").textContent = "Resume";
   document.getElementById("pauseBtn").setAttribute("aria-label", "Resume");
 }
 function resumeExercise() {
@@ -1528,7 +1274,7 @@ function resumeExercise() {
   }
   State.guideMotion?.resume(); State.guideFlip?.play(); window.speechSynthesis?.resume();
   document.getElementById("pauseOverlay").hidden = true;
-  document.getElementById("pauseBtn").textContent = "II";
+  document.getElementById("pauseBtn").textContent = "Pause";
   document.getElementById("pauseBtn").setAttribute("aria-label", "Pause");
 }
 
@@ -1581,7 +1327,7 @@ function finishSession(partial = false) {
   s.endedAt = new Date().toISOString();
   s.partial = partial;
 
-  // Streak logic — per handoff: only count if all 7 have terminal states
+  // Count a practice when all selected moves have terminal states
   // AND at least one is "completed"
   const allTerminal = s.moves.every((m) => ["completed","partial","skipped"].includes(m.status));
   const anyCompleted = s.moves.some((m) => m.status === "completed");
@@ -1595,6 +1341,7 @@ function finishSession(partial = false) {
     endedAt: s.endedAt,
     mode: s.mode,
     routineVersion: s.routineVersion,
+    planId: s.planId,
     partial,
     moves: s.moves,
   });
@@ -1616,7 +1363,7 @@ function finishSession(partial = false) {
 
   saveStore(() => data);
   renderReport(s, data);
-  show("report");
+  if (Experience) Experience.finish(s); else show("report");
   stopCamera();
   releaseWakeLock();
   State.session = null;
@@ -1627,32 +1374,34 @@ function renderReport(session, data) {
   const partial   = session.moves.filter((m) => m.status === "partial").length;
   const skipped   = session.moves.filter((m) => m.status === "skipped").length;
 
-  document.getElementById("reportTime").textContent = formatTime(new Date());
+  const end = new Date(session.endedAt || session.startedAt || session.date);
+  document.getElementById("reportTime").textContent = Number.isNaN(end.getTime()) ? "" :
+    end.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
   document.getElementById("reportCompleted").textContent = completed;
   document.getElementById("reportPartial").textContent = partial;
   document.getElementById("reportSkipped").textContent = skipped;
-  document.getElementById("reportStreak").textContent = data.streak || 0;
-
-  document.getElementById("reportHeadline").textContent = session.partial ? "Session summary" : "Practice complete";
-  renderMandala(session);
+  const streak = data.streak || 0;
+  document.getElementById("reportStreak").textContent = `${streak} ${streak === 1 ? "day" : "days"}`;
+  document.getElementById("reportPercent").textContent = session.moves.length
+    ? Math.round(100 * completed / session.moves.length) + "%" : "0%";
+  document.getElementById("reportDetails").open = false;
+  renderReportDots(session.moves);
 
   const list = document.getElementById("reportList");
   list.innerHTML = "";
-  session.moves.forEach((m, i) => {
-    const def = State.routine.moves[i];
-    const chip = m.status === "completed" ? "completed" :
-                 m.status === "partial"   ? "partial"   : "skipped";
-    const label = m.status === "completed" ? "Completed" :
-                  m.status === "partial"   ? "Partial" :
-                  m.status === "skipped"   ? "Skipped" : "Not done";
+  session.moves.forEach((m) => {
+    const def = State.routine.moves.find(def => def.id === m.id);
+    const status = { completed: "Completed", partial: "Partial", skipped: "Skipped" }[m.status] || "Not done";
+    const confirmation = m.cameraConfirmed ? "Camera confirmed" : m.userConfirmed ? "Self-confirmed" : status;
     const li = document.createElement("li");
-    li.innerHTML = `
-      <span class="idx">${def.order}</span>
-      <span class="meta"><span class="ttl">${def.title.en}</span></span>
-      <span class="status-chip ${chip}">${label}</span>
-    `;
+    if (def && (m.status === "completed" || m.status === "partial")) {
+      li.innerHTML = `<button class="move-quality-link" data-action="openQuality" data-move="${def.id}" aria-label="View ${def.title.en} quality">${def.title.en} <span aria-hidden="true">↗</span></button><small>${confirmation}</small>`;
+    } else {
+      li.innerHTML = `<span>${def?.title.en || "Movement"}</span><small>${confirmation}</small>`;
+    }
     list.appendChild(li);
   });
+  Experience?.renderReportExtras(session);
 }
 
 // =========================================================
@@ -1785,7 +1534,7 @@ function saveStore(mutate) {
 // =========================================================
 // Utilities
 // =========================================================
-function iso(d) { return d.toISOString().slice(0,10); }
+function iso(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; }
 function dayDiff(a, b) {
   return Math.round((new Date(b) - new Date(a)) / 86400000);
 }
@@ -1945,60 +1694,26 @@ function readBlendshapes(result) {
 }
 
 // =====================================================
-// Session mandala — one petal per move, colored by move family.
-// =====================================================
-const PETAL_PRESETS = [
-  { grad: "linear-gradient(160deg, #f8eee2, #ffc0c0)", rot: 0.0 },
-  { grad: "linear-gradient(160deg, #f8eee2, #e2aa9e)", rot: 51.4 },
-  { grad: "linear-gradient(160deg, #f8eee2, #c3c78d)", rot: 102.9 },
-  { grad: "linear-gradient(160deg, #f8eee2, #f3b9b6)", rot: 154.3 },
-  { grad: "linear-gradient(160deg, #f8eee2, #d6d35f)", rot: 205.7 },
-  { grad: "linear-gradient(160deg, #f8eee2, #a9af70)", rot: 257.1 },
-  { grad: "linear-gradient(160deg, #f8eee2, #e9c2b6)", rot: 308.6 },
-];
-
-function renderMandala(session) {
-  const el = document.getElementById("mandala");
-  if (!el) return;
-  el.innerHTML = "";
-
-  session.moves.forEach((m, i) => {
-    if (m.status !== "completed" && m.status !== "partial") return;
-    const preset = PETAL_PRESETS[i];
-    const petal = document.createElement("div");
-    // Petal richness reflects session quality (0..12) if we tracked petals,
-    // otherwise falls back to the status.
-    const q = typeof m.quality === "number" ? m.quality : (m.status === "completed" ? 7 : 3);
-    const tier = q >= 10 ? "q3" : q >= 7 ? "q2" : q >= 4 ? "q1" : "q0";
-    petal.className = `petal show ${tier}` + (m.status === "partial" ? " partial" : "");
-    petal.style.background = preset.grad;
-    petal.style.setProperty("--rot", preset.rot + "deg");
-    petal.style.animationDelay = (0.15 + i * 0.14) + "s";
-    el.appendChild(petal);
-  });
-
-  const core = document.createElement("div");
-  core.className = "core";
-  el.appendChild(core);
-
-  // Deterministic sparkle positions so the mandala is reproducible per session
-  const sparkles = [
-    { x: -70, y: -40, delay: 1.3 },
-    { x:  60, y:  70, delay: 1.6 },
-    { x: -45, y:  80, delay: 1.9 },
-    { x:  75, y: -55, delay: 2.2 },
-  ];
-  sparkles.forEach(({ x, y, delay }) => {
-    const s = document.createElement("div");
-    s.className = "sparkle";
-    s.style.left = `calc(50% + ${x}px - 7px)`;
-    s.style.top  = `calc(50% + ${y}px - 7px)`;
-    s.style.animationDelay = delay + "s";
-    el.appendChild(s);
-  });
+// Each move occupies an equal arc, in practice order. Skipped arcs stay pale.
+function renderReportDots(moves) {
+  const warm = ["#d8ac70", "#e6b3a8", "#b9bd89", "#ebce91", "#d79b87"];
+  const dots = [];
+  for (let lane = 0; lane < 2; lane++) {
+    const count = lane === 0 ? 58 : 53;
+    for (let i = 0; i < count; i++) {
+      const fraction = (i + lane * 0.46) / count;
+      const angle = fraction * Math.PI * 2 - Math.PI / 2;
+      const radius = 133 - lane * 12 + 2.8 * Math.sin(i * 1.9 + lane);
+      const x = (150 + radius * Math.cos(angle)).toFixed(2);
+      const y = (150 + radius * Math.sin(angle)).toFixed(2);
+      const status = moves[Math.floor(fraction * moves.length)]?.status;
+      const fill = status === "completed" ? warm[(i * 3 + lane) % warm.length]
+        : status === "partial" ? "#d9beab" : "#e6e1d7";
+      dots.push(`<circle cx="${x}" cy="${y}" r="${3.7 + ((i + lane) % 3) * .5}" fill="${fill}"/>`);
+    }
+  }
+  document.getElementById("reportDots").innerHTML = dots.join("");
 }
-
-
 
 // Expose the pieces the test harness needs to drive the pipeline
 // without a camera. Only ever imported by test.html / test.js.
@@ -2024,7 +1739,7 @@ window.FaceYoga = {
   nextMove,
   teardownExercise,
   bindActions,
-  renderMandala,
+  finishSession, renderReport, Actions,
   renderRepDots,
   evaluatePrecision,
   beginCalibration,

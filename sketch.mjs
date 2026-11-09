@@ -23,9 +23,10 @@ function makeCanvas(w,h) {
 let art;
 export const sketchReady = typeof Image === 'undefined' ? Promise.resolve(false) : loadArt();
 async function loadArt() {
-  const img=new Image();
+  const img=new Image(), outline=new Image();
+  outline.src=new URL('./art/portrait-outline.svg',import.meta.url).href;
   img.src=new URL('./art/portrait-sheet.jpg',import.meta.url).href;
-  try { await img.decode(); } catch { return false; }
+  try { await Promise.all([img.decode(),outline.decode()]); } catch { return false; }
   const sheet=makeCanvas(img.naturalWidth,img.naturalHeight);
   const ctx=sheet.getContext('2d',{willReadFrequently:true});
   ctx.drawImage(img,0,0);
@@ -40,13 +41,12 @@ async function loadArt() {
   ctx.putImageData(pixels,0,0);
   const base=makeCanvas(768,1024);
   const baseCtx=base.getContext('2d');
-  baseCtx.drawImage(sheet,0,0,768,1024,0,0,768,1024);
+  baseCtx.drawImage(outline,0,0);
   const layers={base};
   for(const [key,[x,y,w,h]] of Object.entries(parts)){
     const layer=makeCanvas(w,h);
     layer.getContext('2d').drawImage(sheet,x,y,w,h,0,0,w,h);
     layers[key]=layer;
-    if(key!=='u')baseCtx.clearRect(x,y,w,h);
   }
   art=layers;
   return true;

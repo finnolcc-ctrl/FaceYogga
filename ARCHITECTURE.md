@@ -1,3 +1,5 @@
+> Current prototype flow and implemented/mock boundaries: [PROTOTYPE-FLOW.md](PROTOTYPE-FLOW.md). The original concept below includes superseded screens and planned AI behavior.
+
 # Face Yoga — Architecture Guide
 
 A walk through how this app is put together, written for a designer. The goal: by the time you finish reading, you can point at any part of the running app and know which layer it belongs to, what decides what, and where AI lives.

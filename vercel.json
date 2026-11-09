@@ -40,7 +40,7 @@
       ]
     },
     {
-      "source": "/(portrait.mjs|guidance.mjs)",
+      "source": "/(portrait.mjs|guidance.mjs|sketch.mjs|experience.mjs|tracking.mjs)",
       "headers": [
         {
           "key": "Cache-Control",

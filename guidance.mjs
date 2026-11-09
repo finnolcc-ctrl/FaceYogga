@@ -29,7 +29,7 @@ export function mouthDiagram(key) {
 }
 export function calibrationDiagram(key) {
   const start = ['left','right','up','down'].includes(key) ? 'u' : 'neutral';
-  return `<div class="pose-pair"><figure>${mouthDiagram(start)}<figcaption>${start === 'u' ? 'Start with U' : 'Start relaxed'}</figcaption></figure><span class="pose-next" aria-hidden="true">→</span><figure>${mouthDiagram(key)}<figcaption>${POSES[key].label}</figcaption></figure></div>`;
+  return `<figure class="calib-target">${mouthDiagram(key)}</figure>` + (start === key ? '' : `<details class="calib-start"><summary>Starting pose</summary><figure>${mouthDiagram(start)}<figcaption>${start === 'u' ? 'Start with U' : 'Start relaxed'}</figcaption></figure></details>`);
 }
 export function guideKey(moveId, phase) {
   if (moveId.startsWith('vowel_') || moveId.startsWith('pucker_')) return phase;

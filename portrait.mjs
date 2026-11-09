@@ -32,21 +32,12 @@ const f = n => Number(n.toFixed(2));
 export const HAIR_OUTLINE = 'M62 161 C43 135 41 100 53 71 C66 38 96 20 133 18 C148 17 156 19 164 20 C197 12 232 26 253 49 C274 74 281 114 258 161 C257 125 244 97 218 84 C197 72 177 72 161 80 C139 70 116 74 96 85 C77 97 65 127 62 161Z';
 const KNOT = 'M119 28 C118 17 126 9 140 6 C153 3 169 5 179 12 C187 17 191 23 189 29 C167 38 143 38 119 28Z';
 const KNOT_FOLD = 'M124 23 C137 12 155 8 171 12 M139 20 C152 13 167 14 179 20';
-const HAIR_WASH = '#806b60';
-// Soft tapered sections define how the hair wraps behind each ear.
-const HAIR_LOCKS = 'M62 153 C55 124 65 79 91 54 C68 85 63 119 62 153Z M257 142 C261 107 245 69 220 46 C248 65 268 110 257 142Z M151 75 C160 57 162 40 160 29 C166 44 161 62 151 75Z';
-// Grouped pencil strokes follow the sweep of the hair, with open space between locks.
 export const HAIR_PATHS = [
-  'M60 144 C54 103 63 64 92 41', 'M61 130 C61 89 77 52 112 32',
-  'M68 108 C80 70 99 47 130 29', 'M81 95 C102 61 119 45 146 27',
-  'M99 83 C118 59 140 45 155 29', 'M124 76 C142 56 156 41 161 27',
-  'M158 77 C167 56 169 40 165 25', 'M173 73 C178 51 177 37 171 25',
-  'M194 74 C195 53 188 37 178 25', 'M215 81 C213 56 199 36 186 27',
-  'M234 95 C232 67 214 44 199 32', 'M248 115 C252 85 236 58 219 43',
-  'M257 136 C265 109 258 83 245 65'
+  'M59 139 C58 108 75 81 95 60', 'M84 88 C103 57 136 39 156 63',
+  'M165 62 C186 40 218 61 238 86', 'M246 105 Q257 125 258 143'
 ];
 export function hairSVG() {
-  return `<g class="portrait-hair" stroke-linecap="round"><path d="${KNOT}" fill="${HAIR_WASH}" stroke="#705c4e"/><path d="${KNOT_FOLD}" fill="none" stroke="#b59d89" stroke-width=".8"/><path d="${HAIR_OUTLINE}" fill="${HAIR_WASH}" stroke="#896b58" stroke-width="1.1"/><path d="${HAIR_LOCKS}" fill="#59473e" fill-opacity=".34" stroke="none"/><g fill="none" stroke="#d7bfaa" opacity=".76">${HAIR_PATHS.map((d,i)=>`<path d="${d}" stroke-width="${i%3===0?'1.1':'.7'}"/>`).join('')}</g></g>`;
+  return `<g class="portrait-hair" fill="none" stroke="currentColor" stroke-linecap="round"><path d="${KNOT}"/><path d="${KNOT_FOLD}" opacity=".6"/><path d="${HAIR_OUTLINE}"/>${HAIR_PATHS.map(d=>`<path d="${d}" stroke-width=".9"/>`).join('')}</g>`;
 }
 // Eye widths and spacing are drawn together, keeping roughly one eye width
 // between the inner corners. Tracked portraits never use these illustrative offsets.

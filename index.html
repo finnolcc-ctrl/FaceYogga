@@ -8,334 +8,23 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>FaceYogga · Practice</title>
   <link rel="stylesheet" href="style.css">
-  <link rel="stylesheet" href="onboarding.css">
 </head>
 <body>
 
-<div id="aurora" aria-hidden="true">
-  <span class="blob b1"></span>
-  <span class="blob b2"></span>
-  <span class="blob b3"></span>
-  <span class="grain"></span>
-</div>
+<div id="aurora" aria-hidden="true"></div>
 
 <main id="app">
-
-  <!-- ============ 1. WELCOME (19:184) ============ -->
-  <section class="screen onb onb-welcome" data-screen="welcome" hidden>
-    <div class="onb-welcome-visual" aria-hidden="true">
-      <div class="ritual-sculpture"><span></span><span></span><span></span></div>
-    </div>
-    <div class="onb-welcome-body">
-      <span class="onb-brandline">FACE YOGA</span>
-      <h1 class="onb-h1 onb-h1--large">Face yoga</h1>
-      <p class="onb-sub">Set up your practice in about two minutes.</p>
-    </div>
-    <button class="onb-btn-primary" data-action="onbStart">
-      <span>Get started</span>
-      <img src="onboarding/assets/arrow-right.svg" alt="" class="onb-arrow-icon">
-    </button>
-  </section>
-
-  <!-- ============ 2. GOALS (19:219) ============ -->
-  <section class="screen onb" data-screen="goals" hidden>
-    <header class="onb-topbar">
-      <button class="onb-back" data-action="onbBack" aria-label="Back">
-        <img src="onboarding/assets/arrow-left.svg" alt="">
-      </button>
-      <div class="onb-progress" data-step="1"><span></span><span></span><span></span><span></span><span></span><span></span></div>
-      <span class="onb-step">2/7</span>
-    </header>
-    <h1 class="onb-h1"><span>What brings</span><span class="dim">you here?</span></h1>
-    <p class="onb-sub">Pick as many as you like.</p>
-    <div class="onb-goals-grid" id="onbGoalsGrid">
-      <button class="onb-goal onb-goal--blue" data-goal="calm" aria-pressed="false">
-        <span class="onb-goal-check" aria-hidden="true"></span>
-        <span class="onb-goal-label">Take a calm<br>break</span>
-      </button>
-      <button class="onb-goal onb-goal--amber" data-goal="learn" aria-pressed="false">
-        <span class="onb-goal-check" aria-hidden="true"></span>
-        <span class="onb-goal-label">Learn the<br>moves</span>
-      </button>
-      <button class="onb-goal onb-goal--pink" data-goal="unwind" aria-pressed="false">
-        <span class="onb-goal-check" aria-hidden="true"></span>
-        <span class="onb-goal-label">Unwind after<br>screens</span>
-      </button>
-      <button class="onb-goal onb-goal--teal" data-goal="habit" aria-pressed="false">
-        <span class="onb-goal-check" aria-hidden="true"></span>
-        <span class="onb-goal-label">Build a daily<br>habit</span>
-      </button>
-    </div>
-    <div class="onb-footer">
-      <button class="onb-btn-primary" data-action="onbNext">
-        <span>Continue</span>
-        <img src="onboarding/assets/arrow-right.svg" alt="" class="onb-arrow-icon">
-      </button>
-    </div>
-  </section>
-
-  <!-- ============ 3. ABOUT YOU (19:296) ============ -->
-  <section class="screen onb" data-screen="about" hidden>
-    <header class="onb-topbar">
-      <button class="onb-back" data-action="onbBack" aria-label="Back">
-        <img src="onboarding/assets/arrow-left.svg" alt="">
-      </button>
-      <div class="onb-progress" data-step="2"><span></span><span></span><span></span><span></span><span></span><span></span></div>
-      <span class="onb-step">3/7</span>
-    </header>
-    <h1 class="onb-h1"><span>A little</span><span class="dim">about you</span></h1>
-
-    <label class="onb-label" for="onbName">WHAT SHOULD WE CALL YOU</label>
-    <input id="onbName" class="onb-input" type="text" placeholder="Mia" value="Mia" autocomplete="given-name">
-
-    <label class="onb-label">FACE YOGA EXPERIENCE</label>
-    <div class="onb-pill-row" id="onbExperience">
-      <button class="onb-pill onb-pill--pink is-selected" data-val="new" aria-pressed="true">New</button>
-      <button class="onb-pill" data-val="some" aria-pressed="false">Some</button>
-      <button class="onb-pill" data-val="regular" aria-pressed="false">Regular</button>
-    </div>
-
-    <label class="onb-label">TIME EACH DAY</label>
-    <div class="onb-pill-row" id="onbTime">
-      <button class="onb-pill" data-val="2" aria-pressed="false">2 min</button>
-      <button class="onb-pill onb-pill--teal is-selected" data-val="4" aria-pressed="true">4 min</button>
-      <button class="onb-pill" data-val="6" aria-pressed="false">6 min</button>
-    </div>
-
-    <label class="onb-label">GENTLE REMINDER</label>
-    <label class="onb-reminder">
-      <span>Every day at</span>
-      <input type="time" id="onbReminder" class="onb-reminder-time" value="20:30">
-    </label>
-
-    <div class="onb-footer">
-      <button class="onb-btn-primary" data-action="onbNext">
-        <span>Continue</span>
-        <img src="onboarding/assets/arrow-right.svg" alt="" class="onb-arrow-icon">
-      </button>
-    </div>
-  </section>
-
-  <!-- ============ 4. PRIVACY (19:371) ============ -->
-  <section class="screen onb" data-screen="privacy" hidden>
-    <header class="onb-topbar">
-      <button class="onb-back" data-action="onbBack" aria-label="Back">
-        <img src="onboarding/assets/arrow-left.svg" alt="">
-      </button>
-      <div class="onb-progress" data-step="3"><span></span><span></span><span></span><span></span><span></span><span></span></div>
-      <span class="onb-step">4/7</span>
-    </header>
-    <h1 class="onb-h1">Camera &amp; privacy</h1>
-    <p class="onb-sub">Your face is analysed on this phone. Nothing is uploaded.</p>
-
-    <div class="onb-toggles" id="onbToggles">
-      <label class="onb-toggle">
-        <div class="onb-toggle-text">
-          <span class="onb-toggle-title">Camera analysis</span>
-          <span class="onb-toggle-sub">On-device only. Needed to give live feedback.</span>
-        </div>
-        <input type="checkbox" data-key="camera" checked>
-        <span class="onb-switch"></span>
-      </label>
-      <label class="onb-toggle">
-        <div class="onb-toggle-text">
-          <span class="onb-toggle-title">Save progress here</span>
-          <span class="onb-toggle-sub">Streaks and history stay on this phone.</span>
-        </div>
-        <input type="checkbox" data-key="save" checked>
-        <span class="onb-switch"></span>
-      </label>
-      <label class="onb-toggle">
-        <div class="onb-toggle-text">
-          <span class="onb-toggle-title">Practice reminders</span>
-          <span class="onb-toggle-sub">A quiet nudge at <span id="onbReminderTime2">20:30</span>.</span>
-        </div>
-        <input type="checkbox" data-key="reminders">
-        <span class="onb-switch"></span>
-      </label>
-      <label class="onb-toggle">
-        <div class="onb-toggle-text">
-          <span class="onb-toggle-title">Anonymous usage stats</span>
-          <span class="onb-toggle-sub">Help us improve. Never includes video.</span>
-        </div>
-        <input type="checkbox" data-key="stats">
-        <span class="onb-switch"></span>
-      </label>
-    </div>
-
-    <p class="onb-footnote">Your browser will ask for camera access.</p>
-
-    <div class="onb-footer">
-      <button class="onb-btn-primary" data-action="onbAllowCamera">
-        <span>Allow camera and continue</span>
-        <img src="onboarding/assets/arrow-right.svg" alt="" class="onb-arrow-icon">
-      </button>
-    </div>
-  </section>
-
-  <!-- ============ 5. FACE SCAN (19:446) ============ -->
-  <section class="screen onb" data-screen="faceScan" hidden>
-    <header class="onb-topbar">
-      <button class="onb-back" data-action="onbBack" aria-label="Back">
-        <img src="onboarding/assets/arrow-left.svg" alt="">
-      </button>
-      <div class="onb-progress" data-step="4"><span></span><span></span><span></span><span></span><span></span><span></span></div>
-      <span class="onb-step">5/7</span>
-    </header>
-    <h1 class="onb-h1"><span>Let's find</span><span class="dim">your face</span></h1>
-    <p class="onb-sub">Prop your phone up and centre your face in the oval.</p>
-
-    <div class="onb-scan-stage">
-      <video id="onbScanVideo" playsinline autoplay muted></video>
-      <canvas id="onbScanMesh"></canvas>
-      <div class="onb-scan-glow"></div>
-      <div class="onb-scan-bar"></div>
-      <div class="onb-scan-caption">
-        <div class="onb-scan-pct" id="onbScanPct">0%</div>
-        <div class="onb-scan-label">SCANNING</div>
-      </div>
-    </div>
-
-    <div class="onb-chip-row">
-      <span class="onb-chip onb-chip--done" id="onbChipFace">
-        <img src="onboarding/assets/check-mini.svg" alt="">
-        Looking for face
-      </span>
-      <span class="onb-chip onb-chip--done" id="onbChipDistance">
-        <img src="onboarding/assets/check-mini.svg" alt="">
-        Adjust distance
-      </span>
-      <span class="onb-chip onb-chip--outline" id="onbChipLight">Find brighter light</span>
-    </div>
-
-    <div class="onb-footer">
-      <button class="onb-btn-primary onb-btn-primary--idle" data-action="onbNext" id="onbScanNext">
-        <span id="onbScanBtnText">Hold still...</span>
-      </button>
-    </div>
-  </section>
-
-  <!-- ============ 6. CALIBRATE (19:509) ============ -->
-  <section class="screen onb" data-screen="teachMoves" hidden>
-    <header class="onb-topbar">
-      <button class="onb-back" data-action="onbBack" aria-label="Back">
-        <img src="onboarding/assets/arrow-left.svg" alt="">
-      </button>
-      <div class="onb-progress" data-step="5"><span></span><span></span><span></span><span></span><span></span><span></span></div>
-      <span class="onb-step">6/7</span>
-    </header>
-    <h1 class="onb-h1"><span>Try these</span><span class="dim">gentle moves</span></h1>
-    <p class="onb-sub">Follow the illustrations. Your camera calibration comes before training.</p>
-
-    <div class="onb-calib-stage">
-      <video id="onbCalibVideo" playsinline autoplay muted></video>
-      <div class="onb-calib-vignette"></div>
-      <div class="onb-calib-ring">
-        <svg viewBox="0 0 150 150" class="onb-calib-arc" aria-hidden="true">
-          <defs>
-            <linearGradient id="onbCalibGrad" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stop-color="#898e46"/>
-              <stop offset="50%" stop-color="#b6b968"/>
-              <stop offset="100%" stop-color="#d6d35f"/>
-            </linearGradient>
-          </defs>
-          <circle cx="75" cy="75" r="68" fill="none" stroke="rgba(255,255,255,.14)" stroke-width="4"/>
-          <circle cx="75" cy="75" r="68" fill="none" stroke="url(#onbCalibGrad)" stroke-width="4" stroke-linecap="round" stroke-dasharray="427" stroke-dashoffset="427" id="onbCalibArc" transform="rotate(-90 75 75)"/>
-        </svg>
-        <div class="onb-calib-center">
-          <strong class="onb-calib-count" id="onbCalibCount">3</strong>
-          <span class="onb-calib-hold">HOLD</span>
-        </div>
-      </div>
-      <div id="onbPoseDiagram" class="onb-pose-diagram"></div>
-      <p class="onb-calib-cue" id="onbCalibCue">Make a soft smile, lips closed</p>
-    </div>
-
-    <div class="onb-chip-row" id="onbCalibChips">
-      <span class="onb-chip onb-chip--done" data-move="smile">
-        <img src="onboarding/assets/check-mini.svg" alt="">
-        Smile
-      </span>
-      <span class="onb-chip onb-chip--outline" data-move="brow">Brow raise</span>
-      <span class="onb-chip onb-chip--outline" data-move="cheek">Cheek puff</span>
-    </div>
-
-    <div class="onb-footer">
-      <button class="onb-btn-ghost" data-action="onbNext">Skip for now</button>
-    </div>
-  </section>
-
-  <!-- ============ 7. YOUR PLAN (19:566) ============ -->
-  <section class="screen onb" data-screen="plan" hidden>
-    <header class="onb-topbar">
-      <button class="onb-back" data-action="onbBack" aria-label="Back">
-        <img src="onboarding/assets/arrow-left.svg" alt="">
-      </button>
-      <div class="onb-progress" data-step="6"><span></span><span></span><span></span><span></span><span></span><span></span></div>
-      <span class="onb-step">7/7</span>
-    </header>
-    <span class="onb-label onb-label--standalone">MADE FOR <span id="onbPlanName">MIA</span></span>
-
-    <article class="onb-plan-card">
-      <header class="onb-plan-head">
-        <h2 class="onb-plan-title">Gentle Start</h2>
-        <p class="onb-plan-sub">4 weeks, 5 days a week</p>
-      </header>
-      <div class="onb-plan-min">
-        <strong class="onb-plan-min-num" id="onbPlanMin">4</strong>
-        <span>min a day</span>
-        <button class="onb-plan-edit" data-action="onbEditPlan">Edit</button>
-      </div>
-      <div class="onb-plan-week">
-        <span class="onb-label">WEEK 1 FOCUS</span>
-        <ol class="onb-plan-moves">
-          <li><span class="onb-move-num onb-move-num--teal">1</span><span class="onb-move-title">Pucker side to side</span><span class="onb-move-dur">20s</span></li>
-          <li><span class="onb-move-num onb-move-num--teal-grad">2</span><span class="onb-move-title">A to U</span><span class="onb-move-dur">20s</span></li>
-          <li><span class="onb-move-num onb-move-num--teal">3</span><span class="onb-move-title">Air side to side</span><span class="onb-move-dur">20s</span></li>
-        </ol>
-      </div>
-    </article>
-
-    <div class="onb-days">
-      <div class="onb-day"><span class="onb-day-dot is-on"></span><span>M</span></div>
-      <div class="onb-day"><span class="onb-day-dot is-on"></span><span>T</span></div>
-      <div class="onb-day"><span class="onb-day-dot"></span><span>W</span></div>
-      <div class="onb-day"><span class="onb-day-dot is-on"></span><span>T</span></div>
-      <div class="onb-day"><span class="onb-day-dot is-on"></span><span>F</span></div>
-      <div class="onb-day"><span class="onb-day-dot is-on"></span><span>S</span></div>
-      <div class="onb-day"><span class="onb-day-dot"></span><span>S</span></div>
-    </div>
-
-
-
-    <div class="onb-footer">
-      <button class="onb-btn-primary" data-action="onbComplete">
-        <span>Start first session</span>
-        <img src="onboarding/assets/arrow-right.svg" alt="" class="onb-arrow-icon">
-      </button>
-    </div>
-  </section>
 
   <!-- ============ HOME ============ -->
   <section class="screen" data-screen="home" hidden>
     <header class="topbar home-topbar">
 
       <span class="brand">faceyogga</span>
-      <span class="date" id="homeDate">—</span>
+      <button class="quiet-link" data-action="openProgress">History ↗</button>
     </header>
-
-    <div class="home-intro">
-      <h1 class="hero-title">Daily practice</h1>
-      <p class="hero-sub">7 moves · About 4 minutes</p>
-    </div>
-
-    <article class="hero glass ritual-card" id="streakHero">
-      <button class="btn btn-primary" data-action="startSession">
-        <span>Start full practice</span><span class="arrow" aria-hidden="true">→</span>
-      </button>
-      <button class="quick-entry" data-action="quickPractice"><span>Try one move</span><small>Camera or guided</small></button>
-    </article>
-
+    <div class="home-intro"><h1 class="hero-title">Daily practice</h1><p class="hero-sub">7 moves · About 4 min</p></div>
+    <div class="home-portrait" id="homePortrait" aria-hidden="true"></div>
+    <details class="routine-peek"><summary>View routine</summary>
     <section class="flow-section" aria-labelledby="flowTitle">
       <div class="flow-heading">
         <h2 id="flowTitle">Exercises</h2>
@@ -347,22 +36,35 @@
       <ul class="moves-mini" id="movesPreviewHome" tabindex="0" aria-label="Today's seven moves"></ul>
     </section>
 
+    </details>
+    <div class="home-actions">
+      <button class="btn btn-primary" data-action="startFullPractice">Start practice</button>
+      <button class="btn quick-entry" data-action="quickPractice">Try one move</button>
+    </div>
+    <button class="row-link" data-action="openPlan">Your practice plan <span aria-hidden="true">›</span></button>
+    <details class="home-week"><summary>This week <span class="date" id="homeDate"></span></summary>
     <section class="weekly-ritual glass" aria-label="Weekly rhythm">
       <div class="weekdots" id="weekDots"></div>
       <div class="weekly-caption"><span id="weekSummary">Start your first</span><span><span id="totalSessions">0</span> sessions in total</span></div>
+      <button class="text-link" data-action="openProgress">View progress →</button>
     </section>
 
+    </details>
+  <nav class="home-links" aria-label="Practice settings" id="homeLinks">
+    <button data-action="openPreferences">Preferences</button><button data-action="openPrivacy">Privacy</button><button data-action="openIntroduction">About</button>
+  </nav>
   </section>
 
   <!-- ============ PREVIEW ============ -->
   <section class="screen" data-screen="preview" hidden>
     <header class="topbar">
-      <button class="icon-btn" data-action="goHome" aria-label="Back">←</button>
+      <button class="icon-btn" data-action="backFromPreview" aria-label="Back">←</button>
       <span class="brand">Today's flow</span>
       <span></span>
     </header>
 
-    <h1 class="screen-title">Your routine</h1>
+    <h1 class="screen-title" id="previewTitle">Your routine</h1>
+    <p class="screen-sub" id="previewSummary"></p>
 
     <ol class="moves-full" id="movesListFull"></ol>
 
@@ -376,20 +78,20 @@
   <section class="screen" data-screen="quickChoice" hidden>
     <header class="topbar">
       <button class="icon-btn" data-action="goHome" aria-label="Back home">←</button>
-      <span class="brand">Quick practice</span><span></span>
+      <span></span><span></span>
     </header>
     <h1 class="screen-title">Try one move</h1>
 
     <div class="mode-cards">
       <button class="mode-card glass" data-action="quickCamera">
-        <span class="mode-badge">Live feedback · 2 rounds</span>
+
         <h3>A → U</h3>
-        <p>3 calibration poses</p>
+        <p>3 calibration poses · 2 rounds</p>
         <span class="mode-cta">Try with camera →</span>
       </button>
       <button class="mode-card glass" data-action="quickGuided">
-        <span class="mode-badge">No camera · 20 seconds</span>
-        <h3>Pucker side to side</h3>
+
+        <h3>Pucker side to side</h3><p>20 seconds · No camera</p>
 
         <span class="mode-cta">Start guided →</span>
       </button>
@@ -400,7 +102,7 @@
   <section class="screen" data-screen="cameraChoice" hidden>
     <header class="topbar">
       <button class="icon-btn" data-action="toPreview" aria-label="Back">←</button>
-      <span class="brand">Choose mode</span>
+      <span></span>
       <span></span>
     </header>
 
@@ -446,15 +148,12 @@
 
   <!-- ============ CALIBRATION ============ -->
   <section class="screen" data-screen="calibration" hidden>
-    <header class="topbar">
-      <button class="icon-btn" data-action="restartCamera" aria-label="Restart">↺</button>
-      <span class="brand">Calibrating</span>
-      <button class="icon-btn" data-action="skipCalibration" aria-label="Skip calibration and use timed guidance">↷</button>
+    <header class="report-top">
+      <button class="icon-btn" data-action="backFromSetup" aria-label="Back to practice options">←</button>
+      <span>Calibration · <span id="calibStep">1 / 8</span></span>
     </header>
-
     <div class="calib-stage">
       <div class="calib-copy">
-        <span class="eyebrow" id="calibStep">1 / 8 · your comfortable range</span>
         <h2 id="calibCue">Keep a relaxed, natural face</h2>
         <p id="calibSub">Follow the illustration. Use a comfortable range.</p>
       </div>
@@ -462,12 +161,12 @@
       <p class="mirror-note">Mirrored · left means your left</p>
       <div class="calib-live-row">
         <div class="calib-live"><video id="calibVideo" playsinline autoplay muted aria-hidden="true"></video><canvas id="calibMesh" class="mesh-canvas" aria-label="Your live face"></canvas></div>
-        <div class="calib-feedback"><span class="eyebrow">Your live pose</span><p id="calibStatus" role="status">Waiting for your face…</p><progress id="calibProgress" max="1" value="0" aria-label="Stable pose capture progress"></progress></div>
+        <div class="calib-feedback"><span class="eyebrow">Your live pose</span><p id="calibStatus" role="status">Waiting for your face…</p><progress class="sr-only" id="calibProgress" max="1" value="0" aria-label="Stable pose capture progress"></progress></div>
       </div>
-      <button class="btn btn-ghost small" data-action="skipCalibration">Use timed guidance instead</button>
+      <button class="btn btn-ghost small" data-action="skipCalibration">Use timed guidance</button>
     </div>
 
-    <p class="footnote">Calibration applies to this session only.</p>
+    <button class="text-link calib-restart" data-action="restartCamera">Restart calibration</button>
   </section>
 
   <!-- ============ EXERCISE ============ -->
@@ -477,20 +176,16 @@
     <div class="exercise-dim" aria-hidden="true"></div>
 
     <header class="topbar topbar-exercise">
-      <button class="icon-btn glass-chip" data-action="togglePause" id="pauseBtn" aria-label="Pause">II</button>
-      <div class="session-progress">
-        <span class="session-mode" id="sessionMode">Guided practice</span>
-        <span class="eyebrow">Move <span id="moveIndex">1</span> of <span id="moveTotal">7</span></span>
-        <div class="progress-track"><div class="progress-fill" id="sessionProgress"></div></div>
-      </div>
       <button class="icon-btn glass-chip" data-action="endSession" aria-label="End">×</button>
+      <h1 id="practiceHeading" class="practice-heading">Watch the movement</h1>
+      <button class="audio-toggle" data-action="toggleSound" id="soundToggle" aria-label="Toggle voice guidance and sounds" aria-pressed="false">♪</button>
     </header>
 
     <div class="exercise-body">
-      <h1 id="practiceHeading" class="practice-heading">Watch the movement</h1>
-      <div id="faceViewSwitch" class="face-view-switch" role="group" aria-label="Your face view" hidden>
-        <button data-action="lineView" id="lineViewButton" aria-pressed="true">Line</button>
-        <button data-action="cameraView" id="cameraViewButton" aria-pressed="false">Camera</button>
+      <div class="session-progress">
+        <span class="session-mode" id="sessionMode">Guided practice</span>
+        <span class="eyebrow">Move <span id="moveIndex">1</span> of <span id="moveTotal">7</span></span>
+        <div class="progress-track" hidden><div class="progress-fill" id="sessionProgress"></div></div>
       </div>
       <div id="portraitStage" class="portrait-stage">
         <div id="heroGuide" class="hero-guide"></div>
@@ -509,17 +204,19 @@
           <div class="guide-text"><span class="eyebrow" id="stageLabel">Watch &amp; prepare</span><h2 class="phase-cue" id="phaseCue">—</h2><p id="guideDetail"></p><ol id="demoSteps" class="demo-steps" aria-label="Movement sequence" hidden></ol></div>
         </div>
         <p class="phase-sub" id="phaseSub" role="status">—</p>
-        <div id="holdFeedback" class="hold-feedback" hidden><span id="holdLabel">Hold gently · 0.0 / 1.0 s</span><progress id="holdProgress" max="1" value="0" aria-label="Continuous hold progress"></progress></div>
+        <div id="holdFeedback" class="hold-feedback" hidden><span id="holdLabel">Hold gently · 0.0 / 1.0 s</span><progress class="sr-only" id="holdProgress" max="1" value="0" aria-label="Continuous hold progress"></progress></div>
       </div>
       <button class="ready-start" data-action="startCountdown" id="readyToStart" hidden>I’m ready <span aria-hidden="true">→</span></button>
       <div class="round-progress"><span id="roundProgress" role="status"></span><div class="rhythm-dots" id="rhythmDots" aria-hidden="true"></div></div>
+      <div id="faceViewSwitch" class="face-view-switch" role="group" aria-label="Your face view" hidden>
+        <button data-action="lineView" id="lineViewButton" aria-pressed="true">Line</button>
+        <button data-action="cameraView" id="cameraViewButton" aria-pressed="false">Camera</button>
+      </div>
     </div>
 
     <footer class="exercise-footer">
-
-      <button class="btn btn-ghost small" data-action="replayDemo">Replay demo</button>
-      <button class="btn btn-ghost small" data-action="skipMove">Skip</button>
-      <button class="audio-toggle" data-action="toggleSound" id="soundToggle" aria-label="Toggle voice guidance and sounds" aria-pressed="false">♪</button>
+      <button class="btn btn-ghost small" data-action="replayDemo">↺ Replay</button>
+      <button class="btn btn-primary" data-action="togglePause" id="pauseBtn" aria-label="Pause">Pause</button>
     </footer>
 
     <div class="selfcheck glass" id="selfcheck" hidden>
@@ -535,6 +232,7 @@
       <h3>Paused</h3>
 
       <button class="btn btn-primary" data-action="resume">Continue</button>
+      <button class="btn btn-ghost" data-action="skipPausedMove">Skip this move</button>
       <button class="btn btn-ghost" data-action="endSession">End session</button>
     </div>
 
@@ -558,41 +256,108 @@
   </section>
 
   <!-- ============ REPORT ============ -->
-  <section class="screen" data-screen="report" hidden>
-    <header class="topbar">
-      <span></span>
-      <span class="brand">This session</span>
-      <span></span>
+  <section class="screen practice-report" data-screen="report" hidden>
+    <header class="report-top">
+      <button class="icon-btn" data-action="reportBack" aria-label="Close report">←</button>
+      <span id="reportSource">Practice report</span>
     </header>
+    <h1 id="reportContext" class="report-title">Full practice</h1>
 
-    <article class="hero glass report-hero">
-      <div class="hero-aurora bloom" aria-hidden="true"></div>
-      <span class="eyebrow">Finished at <span id="reportTime">—</span></span>
-      <div class="mandala-wrap">
-        <div class="mandala" id="mandala" aria-hidden="true"></div>
-      </div>
-      <h1 class="hero-title big" id="reportHeadline">Session summary</h1>
+    <figure class="completion-orbit">
+      <svg viewBox="0 0 300 300" aria-hidden="true" focusable="false">
+        <defs><path id="reportDateArc" d="M 76 151 A 74 74 0 0 1 224 151"/></defs>
+        <g id="reportDots"></g>
+        <text class="orbit-date"><textPath href="#reportDateArc" startOffset="50%" text-anchor="middle" id="reportTime"></textPath></text>
+      </svg>
+      <figcaption><strong id="reportPercent">0%</strong><span>Moves completed</span></figcaption>
+    </figure>
 
-      <div class="report-stats">
-        <div><strong id="reportCompleted">0</strong><em>Completed</em></div>
-        <div><strong id="reportPartial">0</strong><em>Partial</em></div>
-        <div><strong id="reportSkipped">0</strong><em>Skipped</em></div>
-      </div>
-    </article>
-
-    <ul class="moves-full moves-report" id="reportList"></ul>
-
-    <article class="tile tile-wide glass streak-card">
-      <span class="tile-label">Streak</span>
-      <div class="tile-num"><span id="reportStreak">1</span><em>days</em></div>
-
-    </article>
-
-    <div class="screen-cta">
-      <button class="btn btn-primary" data-action="goHome">Done</button>
+    <div class="result-cards">
+      <div class="result-card done"><strong id="reportCompleted">0</strong><span>Completed</span></div>
+      <div class="result-card partial"><strong id="reportPartial">0</strong><span>Partial</span></div>
+      <div class="result-card skipped"><strong id="reportSkipped">0</strong><span>Skipped</span></div>
     </div>
 
-    <p class="footnote">All records stay on your phone.</p>
+    <div class="report-rows">
+      <details id="reportDetails"><summary>Move details</summary><ul id="reportList" class="result-moves"></ul>
+      <div id="strongestCard" class="report-fact" hidden><span>Best camera match</span><span><strong id="strongestMove"></strong> · <span id="strongestRating"></span></span></div>
+      <div id="reportStreakCard" class="report-fact"><span>Current streak</span><strong id="reportStreak"></strong></div>
+      </details>
+      <button class="analysis-link" id="reportCoach" data-action="openQuality">Movement quality <span aria-hidden="true">↗</span></button>
+    </div>
+    <button class="btn btn-primary report-next" data-action="planAfterReport">Plan next practice</button>
+  </section>
+
+
+  <section class="screen" data-screen="introduction" hidden>
+    <header class="topbar"><span></span><span class="brand">faceyogga</span><span></span></header>
+    <div class="intro-art" id="introPortrait" aria-hidden="true"></div>
+    <h1 class="screen-title">Start your practice</h1>
+    <p class="screen-sub">Practise with live camera feedback or follow a timed guide.</p>
+    <div class="screen-cta"><button class="btn btn-primary" data-action="setupPractice">Set up my practice →</button><button class="btn btn-ghost" data-action="dismissIntroduction">Explore first</button></div>
+    <button class="text-link" data-action="openPrivacy">Privacy &amp; how it works</button>
+  </section>
+
+  <section class="screen" data-screen="preferences" hidden>
+    <header class="topbar"><button class="icon-btn" data-action="backFromPreferences" aria-label="Back">←</button><span class="brand">Preferences</span><span></span></header>
+    <h1 class="screen-title">Your practice</h1>
+    <div class="preference-fields glass">
+      <label for="practiceFocus">Focus<select id="practiceFocus"><option value="relax">Relaxation</option><option value="control">Movement control</option><option value="consistency">Daily consistency</option></select></label>
+      <label for="practiceExperience">Experience<select id="practiceExperience"><option value="new">I'm new to face yoga</option><option value="regular">I practise regularly</option></select></label>
+      <label for="practiceMinutes">Time for practice<select id="practiceMinutes"><option value="2">About 2 minutes</option><option value="3">About 3 minutes</option><option value="4">About 4 minutes</option></select></label>
+    </div>
+    <p class="footnote">Saved on this device.</p>
+    <div class="screen-cta"><button class="btn btn-primary" data-action="savePreferences">See my plan →</button></div>
+  </section>
+
+  <section class="screen" data-screen="personalPlan" hidden>
+    <header class="report-top"><button class="icon-btn" data-action="backFromPlan" aria-label="Back">←</button><button class="quiet-link" data-action="editPlanPreferences">Edit preferences</button></header>
+    <h1 class="report-title">Your plan</h1>
+    <fieldset class="plan-choices glass" id="planChoices"><legend class="sr-only">Choose a practice</legend></fieldset>
+    <details class="plan-detail"><summary id="planMovesTitle">View moves</summary><ol class="moves-full" id="planMoves"></ol></details>
+    <details class="plan-detail"><summary>Why this plan?</summary><div class="plan-notes"><h2 id="planFocus"></h2><p id="planReason"></p><p id="planHistory"></p><p>Suggested target range: <strong id="planRange"></strong></p><p>Illustrative range. Live guidance uses your camera calibration.</p></div></details>
+    <div class="screen-cta"><button class="btn btn-primary" data-action="continuePlan">Continue</button></div>
+  </section>
+
+  <section class="screen" data-screen="privacyInfo" hidden>
+    <header class="topbar"><button class="icon-btn" data-action="goHome" aria-label="Back home">←</button><span class="brand">Privacy</span><span></span></header>
+    <h1 class="screen-title">Your face stays here</h1>
+    <div class="insight-card glass"><h2>Camera is optional</h2><p>Video is processed in your browser and isn't recorded or uploaded. Access is requested only when you choose camera practice.</p></div>
+    <div class="insight-card glass"><h2>Saved on this device</h2><p>Preferences and up to 30 session summaries stay in this browser. Face calibration lasts for the current session.</p></div>
+    <div class="insight-card glass"><h2>About the AI</h2><p>MediaPipe tracks your face. Movement rules drive live arrows and hold feedback. Practice plans use your preferences. Movement quality uses preset scores in this prototype.</p><p class="muted">The face model downloads from external services. No face video is sent to them.</p></div>
+    <div class="screen-cta"><button class="btn btn-primary" data-action="goHome">Continue →</button></div>
+  </section>
+
+  <section class="screen finish-screen" data-screen="finish" hidden>
+    <span class="brand">faceyogga</span><div id="finishPortrait" class="finish-portrait"></div>
+    <h1 class="screen-title" id="finishTitle">Practice complete</h1><p class="screen-sub" id="finishCount"></p>
+    <div class="screen-cta"><button class="btn btn-primary" data-action="viewReport">View session →</button><button class="btn btn-ghost" data-action="goHome">Back home</button></div>
+  </section>
+
+  <section class="screen quality-report" data-screen="quality" hidden>
+    <header class="report-top">
+      <button class="icon-btn" data-action="qualityBack" aria-label="Back to report">←</button>
+      <span>Movement quality</span>
+    </header>
+    <h1 class="report-title" id="qualityMoveTitle" aria-live="polite"></h1>
+    <div class="quality-chart" id="qualityChart"></div>
+    <nav class="quality-pager" id="qualityPager" aria-label="Browse movements">
+      <button class="icon-btn" id="qualityPrevious" data-action="previousQuality" aria-label="Previous movement">←</button>
+      <span id="qualityPosition"></span>
+      <button class="icon-btn" id="qualityNext" data-action="nextQuality" aria-label="Next movement">→</button>
+    </nav>
+  </section>
+
+  <section class="screen" data-screen="progress" hidden>
+    <header class="topbar"><button class="icon-btn" data-action="goHome" aria-label="Back home">←</button><span></span><span></span></header>
+    <h1 class="screen-title">Practice history</h1>
+    <article class="insight-card glass"><span class="eyebrow">Past 7 days</span><div id="progressWeek" class="weekdots"></div><div class="progress-stats"><div><strong id="progressDays">0</strong><span>Days this week</span></div><div><strong id="progressSessions">0</strong><span>Sessions</span></div><div><strong id="progressMoves">0</strong><span>Moves completed</span></div></div></article>
+    <p id="bestPractice" class="muted" hidden></p>
+    <div class="flow-heading"><h2>Recent sessions</h2></div>
+    <article class="insight-card glass" id="historyEmpty"><h3>No sessions yet</h3><p>Complete a practice to start your log.</p><button class="text-link" data-action="startSession">Start full practice →</button></article>
+    <ul id="historyList" class="history-list"></ul>
+    <button class="btn btn-ghost" data-action="viewSample">Preview an example report</button>
+    <p class="footnote">Example reports don't add to your history or streak. Totals cover up to 30 saved sessions.</p>
   </section>
 
   <p id="diag" class="diag-strip" hidden></p>

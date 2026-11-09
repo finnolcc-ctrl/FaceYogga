@@ -1,3 +1,5 @@
+> Current prototype flow and implemented/mock boundaries: [PROTOTYPE-FLOW.md](PROTOTYPE-FLOW.md). The original concept below includes superseded screens and planned AI behavior.
+
 # Face Yoga — Week 1
 
 Prove MediaPipe Face Landmarker runs on a real iPhone 15 and emits live blendshape scores. No UI yet, no scoring, no rounds — just camera → model → nine live values on screen.
