@@ -36,15 +36,21 @@ if(params.get('screen')==='calibration'){
   document.getElementById('phaseSub').textContent='Shape found — hold gently.';
   document.getElementById('stageLabel').textContent='Match';
   document.getElementById('moveIndex').textContent=move.order;
-  document.getElementById('holdFeedback').hidden=false;
-  document.getElementById('holdProgress').value=.6;
-  document.getElementById('holdLabel').textContent='Hold gently · 0.6 / 1.0 s';
+  FY.State.phaseGate={fill:.6,cue:'hold'};
+  FY.renderHoldProgress();
   FY.renderRepDots(4,[3]);
   if(params.get('camera')==='1'){
     document.querySelector('[data-screen="exercise"]').classList.add('in-camera-mode');
     document.getElementById('sessionMode').textContent='Layout preview · no live camera';
-    document.getElementById('liveFaceHint').hidden=false;
-    document.getElementById('liveFaceHint').textContent='Your live face appears here';
+    await sketchReady;
+    const mesh=document.getElementById('exerciseMesh');
+    const dpr=window.devicePixelRatio||1;
+    mesh.width=mesh.clientWidth*dpr;mesh.height=mesh.clientHeight*dpr;
+    const ctx=mesh.getContext('2d');ctx.scale(dpr,dpr);
+    fitSketch(ctx,mesh.clientWidth,mesh.clientHeight);renderSketch(ctx,guideSketch(pose));
+    FY.drawFaceFeedback(ctx,guideSketch(pose));
+    mesh.classList.add('on');
+    document.getElementById('liveFaceHint').hidden=true;
   }
   if(params.get('mirror')==='1') {
     const canvas=document.createElement('canvas');canvas.width=640;canvas.height=480;

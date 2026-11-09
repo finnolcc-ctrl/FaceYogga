@@ -11,6 +11,7 @@
 </head>
 <body>
 
+<div id="deviceFrame">
 <div id="aurora" aria-hidden="true"></div>
 
 <main id="app">
@@ -188,12 +189,22 @@
         <div class="progress-track" hidden><div class="progress-fill" id="sessionProgress"></div></div>
       </div>
       <div id="portraitStage" class="portrait-stage">
+        <div id="holdOrbit" class="hold-orbit" hidden>
+          <svg viewBox="0 0 360 360" aria-hidden="true">
+            <circle class="hold-orbit-track" cx="180" cy="180" r="169"/>
+            <circle id="holdOrbitFill" class="hold-orbit-fill" cx="180" cy="180" r="169" pathLength="100"/>
+            <circle id="holdOrbitEcho" class="hold-orbit-echo" cx="180" cy="180" r="169"/>
+          </svg>
+          <span id="holdOrbitMode" class="hold-orbit-mode" hidden>Timed</span>
+        </div>
+        <div class="portrait-content">
         <div id="heroGuide" class="hero-guide"></div>
         <canvas id="exerciseMesh" aria-label="Your live line portrait" class="mesh-canvas mesh-canvas-soft"></canvas>
         <div id="cameraMirror" class="camera-mirror" aria-hidden="true" role="img" aria-label="Your live camera in a soft oval mirror">
           <video id="exerciseVideo" aria-hidden="true" playsinline autoplay muted></video>
         </div>
-        <p id="liveFaceHint" hidden>Bring your face into view</p>
+        <p id="liveFaceHint" role="status" hidden>Bring your face into view</p>
+        </div>
       </div>
 
       <div id="demoCountdown" hidden class="demo-countdown" aria-label="Get ready" role="timer"><span>3</span><span>2</span><span>1</span></div>
@@ -204,7 +215,7 @@
           <div class="guide-text"><span class="eyebrow" id="stageLabel">Watch &amp; prepare</span><h2 class="phase-cue" id="phaseCue">—</h2><p id="guideDetail"></p><ol id="demoSteps" class="demo-steps" aria-label="Movement sequence" hidden></ol></div>
         </div>
         <p class="phase-sub" id="phaseSub" role="status">—</p>
-        <div id="holdFeedback" class="hold-feedback" hidden><span id="holdLabel">Hold gently · 0.0 / 1.0 s</span><progress class="sr-only" id="holdProgress" max="1" value="0" aria-label="Continuous hold progress"></progress></div>
+        <div id="holdFeedback" class="hold-feedback sr-only" hidden><span id="holdLabel"></span><progress id="holdProgress" max="1" value="0" aria-label="Continuous hold progress"></progress></div>
       </div>
       <button class="ready-start" data-action="startCountdown" id="readyToStart" hidden>I’m ready <span aria-hidden="true">→</span></button>
       <div class="round-progress"><span id="roundProgress" role="status"></span><div class="rhythm-dots" id="rhythmDots" aria-hidden="true"></div></div>
@@ -363,6 +374,7 @@
   <p id="diag" class="diag-strip" hidden></p>
 
 </main>
+</div>
 
 <script type="module" src="app.js"></script>
 </body>

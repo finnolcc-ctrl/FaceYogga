@@ -306,3 +306,52 @@ test('ending a selected practice before any completion does not award a streak',
   assert.equal(saved.sessions[0].moves.length,5);assert.equal(saved.sessions[0].partial,true);
   assert.ok(saved.sessions[0].moves.every(m=>m.status==='skipped'));assert.equal(saved.streak,undefined);
 });
+
+test('visible hold ring follows every valid frame and clears for mismatch, face loss and pause',()=>{
+  const {FY,tick,element}=boot();FY.runActive(routine.moves[0]);
+  const arc=element('holdOrbitFill'), progress=element('holdProgress');
+  tick(profile.left);
+  assert.ok(progress.value>0 && progress.value<.1);
+  assert.equal(Number(arc.style.strokeDashoffset),100-FY.State.phaseGate.fill*100);
+  tick(profile.left);
+  assert.equal(progress.value,FY.State.phaseGate.fill);
+  tick(profile.neutral);
+  assert.equal(progress.value,0);assert.equal(arc.style.opacity,'0');
+  tick(profile.left);tick(null);
+  assert.equal(progress.value,0);
+  tick(profile.left);FY.pauseExercise(false);
+  assert.equal(progress.value,0);assert.equal(arc.style.strokeDashoffset,'100');
+  FY.resumeExercise();tick(profile.left);
+  assert.ok(progress.value>0 && progress.value<.1);
+  FY.clearPhaseTimers();
+  assert.equal(element('holdOrbit').hidden,true);
+});
+
+test('hold ring restarts per target and stays complete only after the final confirmed round',()=>{
+  const {FY,tick,element}=boot();FY.runActive(routine.moves[0]);
+  for(let i=0;i<20;i++)tick(profile.left);
+  assert.equal(FY.State.active.phase,'right');assert.equal(element('holdProgress').value,0);
+  for(let i=0;i<20;i++)tick(profile.right);
+  for(let c=1;c<4;c++)for(const phase of ['left','right'])for(let i=0;i<20;i++)tick(profile[phase]);
+  assert.equal(FY.State.session.moves[0].status,'completed');
+  assert.equal(element('holdProgress').value,1);
+  assert.equal(element('holdOrbit').hidden,false);
+  FY.runDemo(routine.moves[1]);
+  assert.equal(element('holdOrbit').hidden,true);
+});
+
+test('timed ring freezes on pause, resumes remaining time, and never marks a camera hold',()=>{
+  const {FY,elapse,element}=boot();FY.State.mode='guided';FY.runActive(routine.moves[0]);
+  const duration=FY.State.active.durationMs;
+  elapse(duration/4);FY.renderHoldProgress();
+  assert.equal(element('holdProgress').value,.25);
+  assert.equal(element('holdOrbit').dataset.mode,'timed');
+  assert.equal(element('holdOrbitMode').hidden,false);
+  FY.pauseExercise(false);elapse(8000);FY.renderHoldProgress();
+  assert.equal(element('holdProgress').value,.25);
+  FY.resumeExercise();elapse(duration/4);FY.renderHoldProgress();
+  assert.equal(element('holdProgress').value,.5);
+  assert.equal(FY.State.phaseGate,null);
+  assert.equal(FY.State.session.moves[0].status,'not_started');
+  FY.clearPhaseTimers();assert.equal(element('holdOrbit').hidden,true);
+});

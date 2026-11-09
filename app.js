@@ -113,6 +113,9 @@ const State = {
   blendshapes: {},                                    // EMA-smoothed category -> score
   observations: null,                                 // { matchedMs, smileWarmth, samples }
   phaseGate: null,                                    // active detection-gated phase state
+  holdComplete: false,
+  orbitPulse: null,
+  trackingNotice: null,
   lastLandmarks: null,                                // most recent faceLandmarks for detection logic
   calibration: null,
   calibrationRun: null,
@@ -156,6 +159,8 @@ function show(name) {
     el.hidden = el.dataset.screen !== name;
   });
   window.scrollTo(0, 0);
+  const app = document.getElementById("app");
+  if (app) app.scrollTop = 0;
 }
 
 // -------- Actions --------
@@ -449,7 +454,9 @@ function runExerciseMeshLoop() {
       }
     }
     const faceVisible = !!State.lastLandmarks?.length && performance.now()-State.lastFrameAt <= 250;
-    document.getElementById("liveFaceHint").hidden = State.intro || faceVisible;
+    const liveHint = document.getElementById("liveFaceHint");
+    liveHint.hidden = State.intro || (faceVisible && !State.trackingNotice);
+    liveHint.textContent = faceVisible ? State.trackingNotice || "" : "Bring your face into view";
     if (performance.now()-State.lastFrameAt > 250) {
       meshEl.classList.remove("on");
       if (State.phaseGate) {
@@ -671,6 +678,11 @@ function clearPhaseTimers() {
   });
   State.active = null;
   State.phaseGate = null;
+  State.holdComplete = false;
+  State.trackingNotice = null;
+  State.orbitPulse?.cancel();
+  cancelAnimationFrame(State.timers.holdRing);
+  State.timers.holdRing = null;
   renderHoldProgress();
 }
 
@@ -798,7 +810,6 @@ function beginCountdown(move) {
   countdown();
 }
 function runReady(move) {
-  const before = State.guideSVG?.getBoundingClientRect?.();
   State.intro = false;
   const camera = State.mode === "camera_assisted_candidate";
   const screen = document.querySelector("[data-screen='exercise']");
@@ -806,7 +817,7 @@ function runReady(move) {
   document.getElementById("practiceHeading").textContent = move.title.en;
   document.getElementById("faceViewSwitch").hidden = !camera;
   document.getElementById("demoCountdown").hidden = true;
-  placeGuide(!camera, camera, before);
+  placeGuide(!camera);
   scheduleCue("enter", () => runActive(move), reducedMotion() ? 0 : 520);
 }
 function setFaceView(view) {
@@ -905,6 +916,9 @@ function evaluatePrecision() {
 function updateFeedback(precision, result) {
   const el = document.getElementById("phaseSub");
   if (el && result) el.textContent = result.hint;
+  // Lip corrections are drawn on the portrait. Only framing/tracking failures
+  // need a visible sentence; retain the detailed cue for assistive technology.
+  State.trackingNotice = result && precision === 0 && !result.correction ? result.hint : null;
 }
 function renderMoveGuide(moveId, phase) {
   const key = moveId ? guideKey(moveId, phase) : null;
@@ -923,13 +937,44 @@ function renderMoveGuide(moveId, phase) {
 }
 function renderHoldProgress() {
   const g = State.phaseGate;
+  const phase = !g && State.active && !State.intro ? State.scheduled.phase : null;
+  const timed = !!phase;
+  const elapsed = phase ? State.active.durationMs - phase.remaining + (State.paused ? 0 : performance.now() - phase.started) : 0;
+  const fill = Math.max(0, Math.min(1, g ? g.fill : State.holdComplete ? 1 : phase ? elapsed / State.active.durationMs : 0));
+  const visible = !!g || timed || !!State.holdComplete;
+  const orbit = document.getElementById("holdOrbit");
+  if (!orbit) return; // The standalone detector diagnostic has no training UI.
+  orbit.hidden = !visible;
+  orbit.dataset.mode = timed ? "timed" : "hold";
+  document.getElementById("holdOrbitMode").hidden = !timed;
+  const arc = document.getElementById("holdOrbitFill");
+  arc.style.strokeDashoffset = String(100 - fill * 100);
+  arc.style.opacity = fill > 0 ? "1" : "0";
   const wrap = document.getElementById("holdFeedback");
   if (!wrap) return;
-  wrap.hidden = !g;
-  if (g) {
-    document.getElementById("holdProgress").value = g.fill;
-    document.getElementById("holdLabel").textContent = `Hold gently · ${(Math.floor(g.fill*10)/10).toFixed(1)} / 1.0 s`;
-  }
+  wrap.hidden = !visible;
+  const progress = document.getElementById("holdProgress");
+  progress.value = fill;
+  progress.setAttribute("aria-label", timed ? "Timed phase progress" : "Continuous hold progress");
+  const label = State.holdComplete ? "Move complete" : timed ? "Timed guidance" : `Hold gently · ${(Math.floor(fill*10)/10).toFixed(1)} / 1.0 s`;
+  const labelElement = document.getElementById("holdLabel");
+  if (labelElement.textContent !== label) labelElement.textContent = label;
+}
+
+function pulseHoldCompletion() {
+  State.orbitPulse?.cancel();
+  State.orbitPulse = document.getElementById("holdOrbitEcho").animate?.([
+    { opacity: .7, transform: "scale(1)" },
+    { opacity: 0, transform: reducedMotion() ? "scale(1)" : "scale(1.035)" }
+  ], { duration: reducedMotion() ? 180 : 480, easing: "ease-out" });
+}
+
+function tickTimedOrbit() {
+  cancelAnimationFrame(State.timers.holdRing);
+  State.timers.holdRing = null;
+  renderHoldProgress();
+  if (State.active && !State.phaseGate && !State.paused && !State.intro)
+    State.timers.holdRing = requestAnimationFrame(tickTimedOrbit);
 }
 
 function advanceGate() {
@@ -960,8 +1005,9 @@ function advanceGate() {
   if (now-(g.lastTextUpdate || 0) > 300) {
     g.lastTextUpdate = now;
     updateFeedback(precision, result);
-    renderHoldProgress();
   }
+  // Drive the visible arc from every detection frame, not the slower copy update.
+  renderHoldProgress();
   if (g.fill >= 1) { snapRep(); return; }
   if (g.elapsedMs >= g.maxMs) {
     const move = State.routine.moves.find(m => m.id === g.moveId);
@@ -995,6 +1041,7 @@ function snapRep() {
   g.lastSoundBucket = null;
   renderRepDots(g.requiredReps, g.petals);
   State.lipRippleAt = performance.now();
+  pulseHoldCompletion();
   if (State.faceView !== "line") flashSnap(petals);
   AudioEngine.snap(petals);
 
@@ -1009,6 +1056,7 @@ function snapRep() {
     moveState.quality = g.petals.reduce((s, p) => s + p, 0);          // 0..12
     State.phaseGate = null;
     State.active = null;
+    State.holdComplete = true;
     if (State.timers.active) { clearTimeout(State.timers.active); State.timers.active = null; }
     autoAdvance(moveState.quality);
   } else {
@@ -1057,7 +1105,7 @@ function showCompletionFlash(quality) {
   flash.className = "completion-flash";
   if (quality !== undefined) flash.dataset.quality = quality;
   flash.innerHTML = '<span class="mark">✓</span>';
-  document.body.appendChild(flash);
+  (document.getElementById("deviceFrame") || document.body).appendChild(flash);
   setTimeout(() => flash.remove(), 1600);
 }
 
@@ -1161,7 +1209,7 @@ function runActivePaced(move) {
       return;
     }
     const p = sched[i];
-    State.active = { moveId: move.id, phase: p.phase, guideCue: guideKey(move.id, p.phase), startedAt: performance.now() };
+    State.active = { moveId: move.id, phase: p.phase, guideCue: guideKey(move.id, p.phase), startedAt: performance.now(), durationMs: p.durationMs };
     document.getElementById("phaseCue").textContent = p.cue.en;
     document.getElementById("phaseSub").textContent = State.mode === "guided" ? "" : "Timed guidance · self-confirmed.";
     renderMoveGuide(move.id, p.phase);
@@ -1175,6 +1223,7 @@ function runActivePaced(move) {
 
     i++;
     scheduleCue("phase", runPhase, p.durationMs);
+    tickTimedOrbit();
   };
   runPhase();
 }
@@ -1215,6 +1264,8 @@ function cycleCountFor(move) {
 // --- Self check overlay ---
 function showSelfCheck(move) {
   State.active = null;
+  cancelAnimationFrame(State.timers.holdRing);
+  State.timers.holdRing = null;
   renderMoveGuide("", "");
   renderHoldProgress();
   setStageLabel("Done?");
@@ -1261,6 +1312,9 @@ function pauseExercise(fromVisibility) {
   State.paused = true;
   State.guideMotion?.pause(); State.guideFlip?.pause(); window.speechSynthesis?.pause();
   if (State.phaseGate) State.phaseGate.fill = 0;
+  cancelAnimationFrame(State.timers.holdRing);
+  State.timers.holdRing = null;
+  State.orbitPulse?.cancel();
   renderHoldProgress();
   document.getElementById("pauseOverlay").hidden = fromVisibility ? true : false;
   document.getElementById("pauseBtn").textContent = "Resume";
@@ -1276,6 +1330,7 @@ function resumeExercise() {
   document.getElementById("pauseOverlay").hidden = true;
   document.getElementById("pauseBtn").textContent = "Pause";
   document.getElementById("pauseBtn").setAttribute("aria-label", "Pause");
+  if (State.active && !State.phaseGate) tickTimedOrbit();
 }
 
 // --- Demo replay overlay ---
@@ -1734,6 +1789,7 @@ window.FaceYoga = {
   snapRep,
   stepGatedPhase,
   drawMesh,
+  drawFaceFeedback,
   autoAdvance,
   flashSnap,
   nextMove,
@@ -1741,6 +1797,7 @@ window.FaceYoga = {
   bindActions,
   finishSession, renderReport, Actions,
   renderRepDots,
+  renderHoldProgress,
   evaluatePrecision,
   beginCalibration,
   recordTrackingFrame,

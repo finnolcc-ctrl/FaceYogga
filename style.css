@@ -349,7 +349,7 @@ progress::-moz-progress-bar { background: var(--olive); border-radius: 99px; }
 .portrait-stage .line-portrait { width: 100%; height: 100%; max-height: none; color: #805d4c; overflow: visible; }
 .line-portrait { color: #805d4c; }
 .motion-arrow { stroke: #898e46; }
-.screen-exercise .portrait-stage > .mesh-canvas { position: absolute; inset: 0; width: 100%; height: 100%; min-height: 0; max-height: none; margin: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; transform: scaleX(-1); opacity: 0; transition: opacity .4s ease .18s; }
+.screen-exercise .portrait-content > .mesh-canvas { position: absolute; inset: 0; width: 100%; height: 100%; min-height: 0; max-height: none; margin: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; transform: scaleX(-1); opacity: 0; transition: opacity .4s ease .18s; }
 .screen-exercise.is-following.in-camera-mode .portrait-stage .mesh-canvas.on { opacity: 1; }
 .screen-exercise.shows-camera .portrait-stage #exerciseMesh { opacity: 0 !important; }
 .screen-exercise #phaseStage, .screen-exercise .exercise-dim { display: none !important; }
@@ -387,7 +387,7 @@ progress::-moz-progress-bar { background: var(--olive); border-radius: 99px; }
  .screen-exercise .exercise-footer {margin-top:5px;}
 }
 @media(prefers-reduced-motion:reduce) {
- .screen-exercise .portrait-stage > .mesh-canvas, .demo-countdown span {transition:none;}
+ .screen-exercise .portrait-content > .mesh-canvas, .demo-countdown span {transition:none;}
 }
 
 .hero-guide { display:block; }
@@ -635,4 +635,61 @@ details[open].routine-peek > summary::after,details[open].calib-start > summary:
 @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))) {
   :root {--glass:#fbf4ecdf;}
   .result-card {background-color:var(--glass);}
+}
+
+/* The preview uses a phone-sized viewport; real phones keep their full screen. */
+:root { --app-height: 100dvh; }
+body:has(#deviceFrame) { background: #eee6de; }
+#deviceFrame { position: relative; isolation: isolate; transform: translateZ(0); width: 100%; height: var(--app-height); margin: auto; overflow: hidden; background: var(--bg); }
+#app { height: 100%; min-height: 0; max-width: none; margin: 0; overflow-y: auto; overscroll-behavior-y: contain; scrollbar-width: none; border: 0; border-radius: 0; box-shadow: none; background: transparent; }
+#app::-webkit-scrollbar, .screen-exercise::-webkit-scrollbar { display: none; }
+.screen { min-height: calc(var(--app-height) - 72px); flex-shrink: 0; }
+#deviceFrame .screen-exercise { inset: 0; width: 100%; max-width: none; min-height: 0; margin: 0; border-radius: 0; box-shadow: none; scrollbar-width: none; padding: max(16px,env(safe-area-inset-top)) 20px max(24px,env(safe-area-inset-bottom)); }
+.selfcheck, .pause-overlay, .demo-overlay { max-height: calc(var(--app-height) - 48px); }
+@media (min-width: 600px) {
+  :root { --app-height: min(844px, calc(100dvh - 48px)); }
+  body:has(#deviceFrame) { display: grid; place-items: center; padding: 24px; }
+  #deviceFrame { width: min(420px, 100%); border-radius: 40px; outline: 5px solid #fff9; box-shadow: 0 0 0 6px #ae93852b, 0 22px 65px -28px #533b3a55; }
+  #deviceFrame::after { content: ''; position: absolute; z-index: 30; pointer-events: none; bottom: 7px; left: calc(50% - 42px); width: 84px; height: 4px; border-radius: 8px; background: #795c513b; }
+}
+
+/* One focal area: the live face, its spatial cues, and the actual hold. */
+.portrait-content { position: absolute; inset: 0; }
+.screen-exercise.is-following .exercise-body { flex: 1 0 auto; gap: 16px; padding-top: 0; }
+.screen-exercise.is-following .topbar-exercise { margin-bottom: 6px; gap: 4px; }
+.screen-exercise .practice-heading { font-size: 23px; line-height: 1.15; text-wrap: balance; }
+.screen-exercise.is-following .session-progress { flex: 0 0 auto; }
+.screen-exercise.is-following .session-progress .eyebrow { font-size: 13px; }
+.screen-exercise.is-following .session-mode,
+.screen-exercise.is-following .phase-copy { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+.screen-exercise.is-following .portrait-stage { flex: 0 0 auto; width: min(100%, max(220px, calc(var(--app-height) - 310px)));
+  height: auto; min-height: 0; max-height: none; aspect-ratio: 1; margin: auto auto 0; }
+.screen-exercise.is-following .portrait-content { inset: 10%; }
+.screen-exercise.is-following .round-progress { font-size: 14px; color: var(--ink-dim); margin-bottom: auto; }
+.screen-exercise.is-following .rhythm-dots { display: none; }
+.screen-exercise .face-view-switch { margin-top: 2px; }
+.screen-exercise .face-view-switch button { min-height: 44px; }
+.screen-exercise .exercise-footer { margin-top: 16px; padding-top: 0; gap: 12px; }
+.screen-exercise .exercise-footer .btn-primary { min-height: 52px; }
+#pauseBtn[aria-label="Pause"]::before { content: 'Ⅱ'; font-size: 18px; }
+.screen-exercise.is-demonstrating .portrait-stage { flex: 1 0 180px; max-height: 280px; }
+.screen-exercise.is-demonstrating .hold-orbit { display: none; }
+.hold-orbit { position: absolute; inset: 0; z-index: 4; pointer-events: none; }
+.hold-orbit svg { width: 100%; height: 100%; overflow: visible; }
+.hold-orbit circle { fill: none; stroke-width: 10; }
+.hold-orbit-track { stroke: rgba(255,250,242,.9); }
+.hold-orbit-fill { stroke: #cb866b; stroke-linecap: round; stroke-dasharray: 100; stroke-dashoffset: 100; transform: rotate(-90deg); transform-origin: 180px 180px; opacity: 0; }
+.hold-orbit-echo { stroke: #cf917a; opacity: 0; transform-origin: 180px 180px; }
+.hold-orbit-mode { position: absolute; bottom: 8%; left: 0; right: 0; text-align: center; color: var(--ink-dim); font-size: 11px; }
+#liveFaceHint, .screen-exercise.shows-camera #liveFaceHint { z-index: 6; inset: auto -5% 11%; width: auto; max-width: none; margin: 0; padding: 6px 10px; border-radius: 16px; background: rgba(255,248,240,.94); font-size: 12px; line-height: 1.35; color: var(--ink); }
+.screen-exercise.is-following .camera-mirror { height: 92%; max-width: 85%; }
+@media (max-width: 360px), (max-height: 680px) {
+  #deviceFrame .screen-exercise { padding-inline: 14px; }
+  .screen-exercise .practice-heading { font-size: 21px; }
+  .screen-exercise.is-following .exercise-body { gap: 10px; }
+  .screen-exercise .exercise-footer { margin-top: 10px; }
+}
+@media (prefers-contrast: more) {
+  .hold-orbit-track { stroke: #e4d4c8; }
+  .hold-orbit-fill { stroke: #a55339; }
 }

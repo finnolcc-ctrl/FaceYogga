@@ -22,3 +22,11 @@ Before evaluating real recognition, enter Mirror mode and complete fresh calibra
 - `/tests/ui-preview.html?camera=1&mirror=1&pose=u` uses a generated canvas stream to check the real
   video element, mask, and view switch without accessing a physical camera.
 - Physical-device frame rate and face-tracking accuracy still require a live check.
+
+## Portrait hold ring and contained phone preview (2026-11-09)
+
+- The visible ring reads the actual continuous detection hold on every model frame. Wrong poses, face loss and pauses reset it; target transitions restart it; only a fully confirmed move leaves it complete.
+- In guided / uncalibrated practice the ring reads the scheduled phase's elapsed time, is labelled “Timed”, and freezes with pause/replay. It never awards camera confirmation.
+- The active screen keeps detailed cues accessible but visually concentrates on the live portrait. Demonstrations and replay retain the full tutorial; framing/lost-face notices stay visible on the portrait.
+- `tests/ui-preview.html?pose=left&camera=1` shows a static 60% ring and synthetic portrait; `&mirror=1` checks the native mirror with generated video. These are layout fixtures, not live recognition tests.
+- Desktop previews are bounded to 420 × 844 CSS pixels and available viewport height. Verified at 1280 × 720 and 1440 × 1000, plus mobile 320 × 568 and 390 × 844; mobile fills the viewport without a decorative device border.
