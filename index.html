@@ -11,6 +11,7 @@
 </head>
 <body>
 
+<div id="devicePreview">
 <div id="deviceFrame">
 <div id="aurora" aria-hidden="true"></div>
 
@@ -202,6 +203,7 @@
         <canvas id="exerciseMesh" aria-label="Your live line portrait" class="mesh-canvas mesh-canvas-soft"></canvas>
         <div id="cameraMirror" class="camera-mirror" aria-hidden="true" role="img" aria-label="Your live camera in a soft oval mirror">
           <video id="exerciseVideo" aria-hidden="true" playsinline autoplay muted></video>
+          <canvas id="cameraFeedback" class="camera-feedback" aria-hidden="true"></canvas>
         </div>
         <p id="liveFaceHint" role="status" hidden>Bring your face into view</p>
         </div>
@@ -374,6 +376,7 @@
   <p id="diag" class="diag-strip" hidden></p>
 
 </main>
+</div>
 </div>
 
 <script type="module" src="app.js"></script>

@@ -6,6 +6,7 @@ import * as tracking from '../tracking.mjs';
 import * as guidance from '../guidance.mjs';
 import * as portrait from '../portrait.mjs';
 import * as experience from '../experience.mjs';
+import * as mirrorFeedback from '../mirror-feedback.mjs';
 const source = readFileSync(new URL('../app.js',import.meta.url),'utf8').replace(/import\s*\{[\s\S]*?\}\s*from\s*"[^"]+";/g,'');
 const routine = JSON.parse(readFileSync(new URL('../routine.v2.json',import.meta.url)));
 const n={x:.015,y:.44,width:.5,gap:.025,jaw:.02,pucker:.02,smile:.01,yaw:0,pitch:.3,roll:0};
@@ -28,8 +29,8 @@ function boot() {
   const timers=new Map();
   const storage=new Map();
   const elements=new Map();
-  const transforms=[];
-  const ctx=new Proxy({}, {get:(_,key)=>key==='setTransform'? (...args)=>transforms.push(args) : key==='createRadialGradient'?()=>({addColorStop(){}}):()=>{}});
+  const transforms=[],paintCalls=[];
+  const ctx=new Proxy({}, {get:(_,key)=>key==='setTransform'? (...args)=>transforms.push(args) : key==='createRadialGradient'?()=>({addColorStop(){}}):(...args)=>paintCalls.push([key,...args])});
   function element(id) {
     if(!elements.has(id)) elements.set(id,{hidden:true,style:{setProperty(){}},dataset:{},textContent:'',innerHTML:'',value:0,
       clientWidth:360,clientHeight:260,width:0,height:0,videoWidth:640,videoHeight:480,currentTime:1,readyState:4,
@@ -39,7 +40,7 @@ function boot() {
   }
   const document={hidden:false,getElementById:element,querySelector:element,querySelectorAll:()=>[],
     createElement:element,body:element('body'),documentElement:element('root'),addEventListener(){}};
-  const sandbox={...tracking,...guidance,...portrait,...experience,animatePortrait:()=>({cancel(){},pause(){},resume(){}}),console,URLSearchParams,document,location:{search:'?test=1',pathname:'/'},
+  const sandbox={...tracking,...guidance,...portrait,...experience,...mirrorFeedback,animatePortrait:()=>({cancel(){},pause(){},resume(){}}),console,URLSearchParams,document,location:{search:'?test=1',pathname:'/'},
     window:{__faceYogaTest:true,devicePixelRatio:2,scrollTo(){}},navigator:{},performance:{now:()=>time},
     localStorage:{getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value)},
     setTimeout:(fn,ms)=>{const id=nextTimer++;timers.set(id,{fn,at:time+ms});return id;},setInterval:()=>1,clearTimeout:id=>timers.delete(id),clearInterval(){},
@@ -61,7 +62,7 @@ function boot() {
     if(f) Object.assign(FY.State.blendshapes,{jawOpen:f.jaw,mouthPucker:f.pucker,mouthSmileLeft:f.smile,mouthSmileRight:f.smile});
     FY.advanceGate();
   }
-  return {FY,element,tick,transforms,storage,elapse(ms){const end=time+ms;let loops=0;while(loops++<1000){const next=[...timers].filter(([id,t])=>t.at<=end).sort((a,b)=>a[1].at-b[1].at)[0];if(!next)break;time=next[1].at;timers.delete(next[0]);next[1].fn();}time=end;},calibTick(f,ms=50){time+=ms;frame=f;element('calibVideo').currentTime+=ms/1000;const cb=raf;raf=null;cb?.();}};
+  return {FY,element,tick,transforms,paintCalls,storage,elapse(ms){const end=time+ms;let loops=0;while(loops++<1000){const next=[...timers].filter(([id,t])=>t.at<=end).sort((a,b)=>a[1].at-b[1].at)[0];if(!next)break;time=next[1].at;timers.delete(next[0]);next[1].fn();}time=end;},calibTick(f,ms=50){time+=ms;frame=f;element('calibVideo').currentTime+=ms/1000;const cb=raf;raf=null;cb?.();}};
 }
 test('a full left/right cycle requires both sides; all four cycles complete',()=>{
   const {FY,tick}=boot();FY.runActive(routine.moves[0]);
@@ -354,4 +355,46 @@ test('timed ring freezes on pause, resumes remaining time, and never marks a cam
   assert.equal(FY.State.phaseGate,null);
   assert.equal(FY.State.session.moves[0].status,'not_started');
   FY.clearPhaseTimers();assert.equal(element('holdOrbit').hidden,true);
+});
+
+
+test('camera view paints shared arrows, lip holds and completion ripples without changing tracking',()=>{
+  const {FY,element,paintCalls,tick}=boot();FY.runActive(routine.moves[0]);
+  tick(profile.left);FY.State.phaseGate.cue='left';
+  const gate=FY.State.phaseGate,fill=gate.fill;
+  FY.setFaceView('camera');
+  const canvas=element('cameraFeedback'),video=element('exerciseVideo');
+  paintCalls.length=0;
+  FY.drawCameraFeedback(canvas,video,detection(profile.left).faceLandmarks);
+  assert.ok(paintCalls.some(([name])=>name==='quadraticCurveTo'),'directional arrow drawn');
+  assert.equal(FY.State.phaseGate,gate);assert.equal(gate.fill,fill);
+  gate.cue='hold';gate.fill=.6;paintCalls.length=0;
+  FY.drawCameraFeedback(canvas,video,detection(profile.left).faceLandmarks);
+  assert.ok(paintCalls.some(([name])=>name==='lineTo'),'tracked lip path drawn');
+  FY.State.lipRippleAt=1000;paintCalls.length=0;
+  FY.drawCameraFeedback(canvas,video,detection(profile.left).faceLandmarks);
+  assert.ok(paintCalls.some(([name])=>name==='ellipse'),'completion ripple drawn');
+});
+
+test('camera overlay clears on pause, missing face, tutorial and switching to line mode',()=>{
+  const {FY,element,paintCalls,tick}=boot();FY.runActive(routine.moves[0]);
+  tick(profile.left);FY.State.phaseGate.cue='left';FY.setFaceView('camera');
+  const draw=points=>FY.drawCameraFeedback(element('cameraFeedback'),element('exerciseVideo'),points);
+  for(const state of ['paused','intro','missing','line']){
+    FY.State.paused=state==='paused';FY.State.intro=state==='intro';FY.State.faceView=state==='line'?'line':'camera';
+    paintCalls.length=0;draw(state==='missing'?[]:detection(profile.left).faceLandmarks);
+    assert.ok(paintCalls.some(([name])=>name==='clearRect'),state+' removes stale cues');
+    assert.ok(!paintCalls.some(([name])=>name==='stroke'),state+' draws no cues');
+  }
+});
+
+test('camera mirror also draws timed cheek guidance without awarding a detected hold',()=>{
+  const {FY,element,paintCalls}=boot();FY.State.faceView='camera';FY.State.phaseGate=null;
+  for(const cue of ['tongue_left_up','air_right','draw_in','hold']) {
+    FY.State.active={guideCue:cue,startedAt:1000};paintCalls.length=0;
+    FY.drawCameraFeedback(element('cameraFeedback'),element('exerciseVideo'),detection(profile.neutral).faceLandmarks);
+    assert.ok(paintCalls.some(([name])=>name==='stroke'),cue+' is visible');
+    assert.equal(FY.State.phaseGate,null);
+    assert.equal(FY.State.session.moves[0].status,'not_started');
+  }
 });

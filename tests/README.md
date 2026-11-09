@@ -29,4 +29,12 @@ Before evaluating real recognition, enter Mirror mode and complete fresh calibra
 - In guided / uncalibrated practice the ring reads the scheduled phase's elapsed time, is labelled “Timed”, and freezes with pause/replay. It never awards camera confirmation.
 - The active screen keeps detailed cues accessible but visually concentrates on the live portrait. Demonstrations and replay retain the full tutorial; framing/lost-face notices stay visible on the portrait.
 - `tests/ui-preview.html?pose=left&camera=1` shows a static 60% ring and synthetic portrait; `&mirror=1` checks the native mirror with generated video. These are layout fixtures, not live recognition tests.
-- Desktop previews are bounded to 420 × 844 CSS pixels and available viewport height. Verified at 1280 × 720 and 1440 × 1000, plus mobile 320 × 568 and 390 × 844; mobile fills the viewport without a decorative device border.
+- Desktop previews use an iPhone 13 logical viewport of 390 × 844 CSS pixels with 47px top / 34px bottom preview safe areas. Short desktop windows scale the entire device uniformly instead of shortening its viewport. Typography and artwork use device dimensions rather than host-window dimensions. Verified at 1280 × 720 and 1440 × 1000, plus mobile 390 × 844; real phones fill their viewport and use native safe-area insets without a decorative device border.
+
+## Camera mirror feedback
+
+- The native mirror has a transparent canvas using the existing Face Landmarker results. No additional inference, segmentation, camera stream or video-frame copy is introduced.
+- The shared cue painter draws the same arrows, cheek marks, lip hold and completion ripple in both views. Mirror anchors use measured landmarks with the video's `object-fit: cover`, `object-position: 50% 42%`, and one matching CSS horizontal flip. Hold ink follows the measured outer lip contour.
+- Pausing, demos, missing/stale tracking and leaving Camera view clear the overlay. View changes leave the hold gate and round count unchanged.
+- Geometry tests cover landscape/portrait crops, head translation/roll, resize, invalid landmarks and partial/full lip traces. App tests cover detected and timed feedback and clearing behavior.
+- The synthetic video fixture supports `?pose=u&camera=1&mirror=1&feedback=round-lips`, `feedback=hold` or `feedback=ripple`. Its animated landmark fixture matches the drawn test video and does not access the user's camera. Real-camera alignment and device performance still need a manual check.

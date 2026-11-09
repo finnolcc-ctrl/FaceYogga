@@ -9,6 +9,7 @@ import { POSES, CALIBRATION_STEPS, calibrationDiagram, guideKey, guidePoseKeys, 
 import { portraitSVG, animatePortrait, faceFrame, trackedSketch, renderSketch, fitSketch, mouthBounds, traceLipHold } from "./portrait.mjs";
 
 import { PLANS, practiceMoves, practiceStats, createExperience } from "./experience.mjs";
+import { mirrorFeedbackGeometry, traceMirrorLipHold } from "./mirror-feedback.mjs";
 
 let Experience;
 
@@ -126,6 +127,20 @@ const State = {
 };
 
 // -------- Boot --------
+// Desktop previews retain the iPhone 13's 390 × 844 logical viewport even on
+// shorter laptop windows. Real phones use their own viewport and safe areas.
+function fitDevicePreview() {
+  const preview = document.getElementById("devicePreview");
+  if (!preview) return;
+  const scale = window.innerWidth >= 600
+    ? Math.min(1, (window.innerWidth - 48) / 390, (window.innerHeight - 48) / 844)
+    : 1;
+  preview.style.setProperty("--preview-scale", String(Math.max(.1, scale)));
+}
+if (window.addEventListener) {
+  fitDevicePreview();
+  window.addEventListener("resize", fitDevicePreview, { passive: true });
+}
 const IS_TEST = typeof location !== "undefined"
   && (new URLSearchParams(location.search).get("test") === "1"
       || /\/test\.html?$/.test(location.pathname)
@@ -433,6 +448,7 @@ function runExerciseMeshLoop() {
   const tick = () => {
     if (!State.session || State.mode !== "camera_assisted_candidate") {
       meshEl.classList.remove("on");
+      clearCameraFeedback();
       Stickers.exercise.update(null, meshEl);
       return;
     }
@@ -445,12 +461,14 @@ function runExerciseMeshLoop() {
         updateAurora();
         advanceGate();
         if (State.faceView === "line") drawMesh(meshEl, videoEl, res.faceLandmarks, !State.paused);
+        else drawCameraFeedback(document.getElementById("cameraFeedback"), videoEl, res.faceLandmarks);
         Stickers.exercise.update(res.faceLandmarks, meshEl);
         if (res.faceLandmarks?.length) meshEl.classList.add("on");
         else meshEl.classList.remove("on");
       } catch {
         State.lastLandmarks = null;
         State.blendshapes = {};
+        clearCameraFeedback();
       }
     }
     const faceVisible = !!State.lastLandmarks?.length && performance.now()-State.lastFrameAt <= 250;
@@ -459,6 +477,7 @@ function runExerciseMeshLoop() {
     liveHint.textContent = faceVisible ? State.trackingNotice || "" : "Bring your face into view";
     if (performance.now()-State.lastFrameAt > 250) {
       meshEl.classList.remove("on");
+      clearCameraFeedback();
       if (State.phaseGate) {
         State.phaseGate.fill = 0;
         renderHoldProgress();
@@ -661,6 +680,7 @@ function clearAllTimers() {
 // Stop every move-related timer so the current phase cannot bleed into
 // the next one. Called before Skip / Retry / Self-check transitions.
 function clearPhaseTimers() {
+  clearCameraFeedback();
   State.lipRippleAt = null;
   State.watchMove = null;
   const steps=document.getElementById("demoSteps");
@@ -828,6 +848,9 @@ function setFaceView(view) {
   document.getElementById("cameraViewButton")?.setAttribute("aria-pressed", String(camera));
   document.getElementById("cameraMirror")?.setAttribute("aria-hidden", String(!camera));
   document.querySelector("[data-screen='exercise']")?.classList.toggle("shows-camera", camera);
+  clearCameraFeedback();
+  if (camera && performance.now()-State.lastFrameAt <= 250)
+    drawCameraFeedback(document.getElementById("cameraFeedback"), document.getElementById("exerciseVideo"), State.lastLandmarks);
   // The same stream drives tracking and the native mirror. No extra model or frame copies.
 }
 
@@ -1310,6 +1333,7 @@ function pauseExercise(fromVisibility) {
     clearTimeout(entry.timer); entry.remaining = Math.max(0, entry.remaining - (performance.now()-entry.started));
   }
   State.paused = true;
+  clearCameraFeedback();
   State.guideMotion?.pause(); State.guideFlip?.pause(); window.speechSynthesis?.pause();
   if (State.phaseGate) State.phaseGate.fill = 0;
   cancelAnimationFrame(State.timers.holdRing);
@@ -1637,6 +1661,22 @@ function drawMesh(canvas, video, landmarks, showFeedback = false) {
   ctx.restore();
 }
 
+function clearCameraFeedback() {
+  const canvas=document.getElementById("cameraFeedback");
+  const ctx=canvas?.getContext("2d");
+  if (!ctx) return;
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+}
+
+function drawCameraFeedback(canvas, video, landmarks) {
+  clearCameraFeedback();
+  if (State.paused || State.intro || State.faceView !== "camera" || !landmarks?.[0]) return;
+  if (!fitCanvasToVideo(canvas,video)) return;
+  const geometry=mirrorFeedbackGeometry(landmarks[0],video.videoWidth,video.videoHeight,canvas.clientWidth,canvas.clientHeight);
+  if (geometry) drawFaceFeedback(canvas.getContext("2d"),null,geometry);
+}
+
 // Each mark has a tracked anchor, direction (x, y), and offset in portrait units.
 // Paired cheek rings mark where to maintain a timed hold.
 const INWARD_LIPS = [[61,1,0,-5,0],[291,-1,0,5,0]];
@@ -1659,60 +1699,74 @@ const FACE_MARKS = {
 
 // Draw in the portrait's own coordinate system so camera mirroring, zoom
 // and head movement affect the ink and the cue together.
-function drawFaceFeedback(ctx, pose) {
+function drawFaceFeedback(ctx, pose, geometry = null) {
   const gate = State.phaseGate;
   const cue = gate ? gate.cue : State.active?.guideCue;
   const now = performance.now();
   const ripple = State.lipRippleAt == null ? 1 : (now - State.lipRippleAt) / 480;
   if (ripple >= 1 && !cue) return;
 
-  const {x:cx,y:cy,width,height} = mouthBounds(pose);
-  const unit = 2.5;
-  const anchors = {
+  const {x:cx,y:cy,width,height} = geometry?.mouth || mouthBounds(pose);
+  const unit = geometry?.unit || 2.5;
+  const anchors = geometry?.anchors || {
     61:[cx-width/2,cy], 291:[cx+width/2,cy], 152:[433,785],
     205:[433-146*pose.faceWidth-pose.cheekL,633],425:[433+146*pose.faceWidth+pose.cheekR,633]
   };
   const still = reducedMotion();
   ctx.save();
   ctx.lineCap = ctx.lineJoin = "round";
+  // White camera ink has a restrained dark keyline, including over highlights.
+  // Keep the original warm/olive palette for the illustrated portrait.
+  if (geometry) { ctx.shadowColor="rgba(25,22,24,.35)";ctx.shadowBlur=1.5*unit; }
+  const strokeCue = (outline = 1.4*unit) => {
+    if (geometry) {
+      ctx.save();ctx.strokeStyle="rgba(32,28,30,.72)";
+      ctx.lineWidth+=outline;ctx.stroke();ctx.restore();
+    }
+    ctx.stroke();
+  };
   if (ripple < 1 || (gate && cue === "hold")) {
-    ctx.strokeStyle = "#697442";
+    ctx.strokeStyle = geometry ? "#ffffff" : "#697442";
     if (ripple < 1) {
       const radius = width/2;
       const spread = (still ? 3 : 2 + 11*ripple) * unit;
       ctx.globalAlpha = .85*(1-ripple);
-      ctx.lineWidth = 1.8*unit;
+      ctx.lineWidth = (geometry ? 2.3 : 1.8)*unit;
       ctx.beginPath();
-      ctx.ellipse(cx,cy,radius+spread,height/2+spread,0,0,2*Math.PI);
-      ctx.stroke();
+      ctx.ellipse(cx,cy,radius+spread,height/2+spread,geometry?.roll || 0,0,2*Math.PI);
+      strokeCue();
     } else if (gate.fill > 0) {
-      ctx.lineWidth = 2.3*unit;
-      traceLipHold(ctx,pose,gate.fill);
+      ctx.lineWidth = (geometry ? 2.7 : 2.3)*unit;
+      if (geometry) traceMirrorLipHold(ctx,geometry.lipPath,gate.fill,strokeCue);
+      else traceLipHold(ctx,pose,gate.fill);
     }
   } else {
     // Directions are in unmirrored source coordinates. Increasing x appears
     // on the user's left in the line portrait, just as in the guide illustration.
     const marks = FACE_MARKS[cue];
-    const drift = still ? 0 : 1.5 * Math.sin((now - (gate?.cueSince ?? State.active.startedAt))/180);
+    const drift = still ? 0 : 1.5 * Math.sin((now - (gate?.cueSince ?? State.active?.startedAt ?? now))/180);
     for (const [anchor,dx,dy,offsetX,offsetY] of marks || []) {
       const [x,y] = anchors[anchor];
       ctx.save();
       ctx.translate(x,y);
+      if (geometry) ctx.rotate(geometry.roll);
       ctx.scale(unit,unit);
       ctx.translate(offsetX+dx*drift,offsetY+dy*drift);
-      ctx.strokeStyle = ctx.fillStyle = "#aa5b40";
-      ctx.lineWidth = 2.2;
+      ctx.strokeStyle = ctx.fillStyle = geometry ? "#ffffff" : "#aa5b40";
+      ctx.lineWidth = geometry ? 2.7 : 2.2;
       ctx.beginPath();
       if (dx || dy) {
         ctx.rotate(Math.atan2(dy,dx));
         ctx.moveTo(-12,1); ctx.quadraticCurveTo(-6,-1,0,0);
         ctx.moveTo(-4,-3.5); ctx.lineTo(0,0); ctx.lineTo(-4,3.5);
-        ctx.stroke();
+        strokeCue(1.4);
         if (cue.startsWith("tongue_")) {
-          ctx.beginPath(); ctx.arc(4,0,1.7,0,2*Math.PI); ctx.fill();
+          ctx.beginPath(); ctx.arc(4,0,1.7,0,2*Math.PI);
+          if (geometry) strokeCue(1.4);
+          ctx.fill();
         }
       } else {
-        ctx.arc(0,0,3.5,0,2*Math.PI); ctx.stroke();
+        ctx.arc(0,0,3.5,0,2*Math.PI); strokeCue(1.4);
       }
       ctx.restore();
     }
@@ -1789,6 +1843,7 @@ window.FaceYoga = {
   snapRep,
   stepGatedPhase,
   drawMesh,
+  drawCameraFeedback,
   drawFaceFeedback,
   autoAdvance,
   flashSnap,

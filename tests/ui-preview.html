@@ -1,7 +1,8 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><base href="../"><title>FaceYogga · UI fixture</title><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="onboarding.css"></head><body><script type="module">
 // Static fixture of production markup and helpers. No camera, model or stored session.
 import { POSES, calibrationDiagram } from './guidance.mjs';
-import { sketchReady, renderSketch, guideSketch, fitSketch } from './sketch.mjs';
+import { sketchReady, renderSketch, guideSketch, fitSketch, mouthBounds } from './sketch.mjs';
+import { OUTER_LIP } from './mirror-feedback.mjs';
 const params=new URLSearchParams(location.search);
 const pose=Object.hasOwn(POSES,params.get('pose'))?params.get('pose'):'a';
 const html=await (await fetch('index.html')).text();
@@ -65,8 +66,26 @@ if(params.get('screen')==='calibration'){
       ctx.save();ctx.translate(320+Math.sin(time/1800)*8,215);
       ctx.fillStyle='#faf7ef';ctx.beginPath();ctx.ellipse(0,0,119,173,0,0,7);ctx.fill();ctx.restore();
       ctx.save();ctx.translate(160+Math.sin(time/1800)*8,0);
-      fitSketch(ctx,320,380);renderSketch(ctx,guideSketch(pose));ctx.restore();
+      const sketch=guideSketch(pose);
+      fitSketch(ctx,320,380);renderSketch(ctx,sketch);
+      const matrix=ctx.getTransform(),mouth=mouthBounds(sketch);
+      const points=Array.from({length:478},()=>({x:.5,y:.5}));
+      const place=(i,x,y)=>{const p=matrix.transformPoint({x,y});points[i]={x:p.x/640,y:p.y/480};};
+      for(const [i,x,y] of [[33,320,474],[263,546,474],[13,mouth.x,mouth.y-8],[14,mouth.x,mouth.y+8],[152,433,785],[205,287,633],[425,579,633]])place(i,x,y);
+      OUTER_LIP.slice(0,-1).forEach((id,i)=>{
+        const a=Math.PI+i*Math.PI*2/(OUTER_LIP.length-1);
+        place(id,mouth.x+Math.cos(a)*mouth.width/2,mouth.y+Math.sin(a)*mouth.height/2);
+      });
+      ctx.restore();
       ctx.fillStyle='#613f35';ctx.font='20px sans-serif';ctx.fillText('Test video '+Math.floor(time/1000)+' s',220,440);
+      if(!FY.State.paused && !FY.State.intro){
+        const cue=params.get('feedback')||'hold';
+        FY.State.phaseGate={fill:cue==='hold'?.6:0,cue:cue==='ripple'?null:cue,cueSince:0};
+        FY.State.lipRippleAt=cue==='ripple'?performance.now()-(time%480):null;
+        FY.renderHoldProgress();
+      }
+      FY.State.lastLandmarks=[points];FY.State.lastFrameAt=performance.now();
+      FY.drawCameraFeedback(document.getElementById('cameraFeedback'),document.getElementById('exerciseVideo'),[points]);
       requestAnimationFrame(paint);
     }
     paint(0);
